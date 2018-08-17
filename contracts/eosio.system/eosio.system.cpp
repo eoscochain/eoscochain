@@ -9,6 +9,11 @@
 
 namespace eosiosystem {
 
+   uint64_t system_token_symbol() {
+     static auto symbol =  core_symbol();
+     return symbol;
+   }
+
    system_contract::system_contract( account_name s )
    :native(s),
     _voters(_self,_self),
@@ -22,7 +27,7 @@ namespace eosiosystem {
       auto itr = _rammarket.find(S(4,RAMCORE));
 
       if( itr == _rammarket.end() ) {
-         auto system_token_supply   = eosio::token(N(eosio.token)).get_supply(eosio::symbol_type(system_token_symbol).name()).amount;
+         auto system_token_supply   = eosio::token(N(eosio.token)).get_supply(eosio::symbol_type(system_token_symbol()).name()).amount;
          if( system_token_supply > 0 ) {
             itr = _rammarket.emplace( _self, [&]( auto& m ) {
                m.supply.amount = 100000000000000ll;
@@ -30,7 +35,7 @@ namespace eosiosystem {
                m.base.balance.amount = int64_t(_gstate.free_ram());
                m.base.balance.symbol = S(0,RAM);
                m.quote.balance.amount = system_token_supply / 1000;
-               m.quote.balance.symbol = CORE_SYMBOL;
+               m.quote.balance.symbol = core_symbol();
             });
          }
       } else {
@@ -134,6 +139,17 @@ namespace eosiosystem {
       }
    }
 
+   void system_contract::setsched( uint8_t sched_size ) {
+      require_auth( _self );
+
+      eosio_assert( sched_size >= 3 && sched_size <= 51, "producers number must be in range [3, 51]" ); // TODO
+      eosio_assert( sched_size % 2 == 1, "producers number must be odd" );
+
+      eosio_assert( _gstate.total_activated_stake < min_activated_stake, "minimum activated stake has reached" );
+
+      _gstate.max_producer_schedule_size = sched_size;
+   }
+
    /**
     *  Called after a new account is created. This code enforces resource-limits rules
     *  for new accounts as well as new account naming conventions.
@@ -188,7 +204,7 @@ EOSIO_ABI( eosiosystem::system_contract,
      // native.hpp (newaccount definition is actually in eosio.system.cpp)
      (newaccount)(updateauth)(deleteauth)(linkauth)(unlinkauth)(canceldelay)(onerror)
      // eosio.system.cpp
-     (setram)(setparams)(setpriv)(rmvproducer)(bidname)
+     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setsched)
      // delegate_bandwidth.cpp
      (buyrambytes)(buyram)(sellram)(delegatebw)(undelegatebw)(refund)
      // voting.cpp

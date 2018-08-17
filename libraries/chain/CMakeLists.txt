@@ -39,6 +39,8 @@ add_library( eosio_chain
              webassembly/wavm.cpp
              webassembly/binaryen.cpp
 
+              symbol.cpp
+
 #             get_config.cpp
 #             global_property_object.cpp
 #

@@ -45,6 +45,8 @@ struct genesis_state {
    time_point                               initial_timestamp;
    public_key_type                          initial_key;
 
+   string                                   core_symbol;
+
    /**
     * Get the chain_id corresponding to this genesis state.
     *
@@ -57,4 +59,4 @@ struct genesis_state {
 
 
 FC_REFLECT(eosio::chain::genesis_state,
-           (initial_timestamp)(initial_key)(initial_configuration))
+           (initial_timestamp)(initial_key)(core_symbol)(initial_configuration))

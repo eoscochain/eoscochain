@@ -12,6 +12,7 @@
 #include <eosio/chain/wasm_eosio_injection.hpp>
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/account_object.hpp>
+#include <eosio/chain/symbol.hpp>
 #include <fc/exception/exception.hpp>
 #include <fc/crypto/sha256.hpp>
 #include <fc/crypto/sha1.hpp>
@@ -977,6 +978,16 @@ class action_api : public context_aware_api {
       }
 };
 
+class core_symbol_api : public context_aware_api {
+   public:
+      core_symbol_api( apply_context& ctx )
+      : context_aware_api(ctx,true) {}
+
+      uint64_t core_symbol() {
+         return ::eosio::chain::core_symbol();
+      }
+};
+
 class console_api : public context_aware_api {
    public:
       console_api( apply_context& ctx )
@@ -1802,6 +1813,11 @@ REGISTER_INTRINSICS(authorization_api,
    (require_authorization, void(int64_t, int64_t), "require_auth2", void(authorization_api::*)(const account_name&, const permission_name& permission) )
    (has_authorization,     int(int64_t), "has_auth", bool(authorization_api::*)(const account_name&)const )
    (is_account,            int(int64_t)           )
+);
+
+
+REGISTER_INTRINSICS(core_symbol_api,
+   (core_symbol, int64_t())
 );
 
 REGISTER_INTRINSICS(console_api,

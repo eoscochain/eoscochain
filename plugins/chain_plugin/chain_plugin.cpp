@@ -154,6 +154,7 @@ public:
    ,incoming_transaction_async_method(app().get_method<incoming::methods::transaction_async>())
    {}
 
+   bool                             exit_after_init_chain = false;
    bfs::path                        blocks_dir;
    bool                             readonly = false;
    flat_map<uint32_t,block_id_type> loaded_checkpoints;
@@ -259,6 +260,8 @@ void chain_plugin::set_program_options(options_description& cli, options_descrip
    cli.add_options()
          ("genesis-json", bpo::value<bfs::path>(), "File to read Genesis State from")
          ("genesis-timestamp", bpo::value<string>(), "override the initial timestamp in the Genesis State file")
+         ("exit-after-initialize-blockchain", bpo::bool_switch()->default_value(false),
+          "exit after initialize new blockchain with genesis state")
          ("print-genesis-json", bpo::bool_switch()->default_value(false),
           "extract genesis_state from blocks.log as JSON, print to console, and exit")
          ("extract-genesis-json", bpo::value<bfs::path>(),
@@ -513,6 +516,8 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
          wlog("The --import-reversible-blocks option should be used by itself.");
       }
 
+      my->exit_after_init_chain = options.at("exit-after-initialize-blockchain").as<bool>();
+
       if( options.count( "genesis-json" )) {
          EOS_ASSERT( !fc::exists( my->blocks_dir / "blocks.log" ),
                      plugin_config_exception,
@@ -549,9 +554,12 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
          wlog( "Starting up fresh blockchain with default genesis state but with adjusted genesis timestamp." );
       } else if( fc::is_regular_file( my->blocks_dir / "blocks.log" )) {
          my->chain_config->genesis = block_log::extract_genesis_state( my->blocks_dir );
+         EOS_ASSERT(!my->exit_after_init_chain, plugin_config_exception, "Only can exit after a new blockchain is initialized");
       } else {
          wlog( "Starting up fresh blockchain with default genesis state." );
       }
+      // set core symbol
+      core_symbol(my->chain_config->genesis.core_symbol);
 
       if ( options.count("read-mode") ) {
          my->chain_config->read_mode = options.at("read-mode").as<db_read_mode>();
@@ -645,10 +653,15 @@ void chain_plugin::plugin_startup()
       ilog("starting chain in read/write mode");
    }
 
-   ilog("Blockchain started; head block is #${num}, genesis timestamp is ${ts}",
-        ("num", my->chain->head_block_num())("ts", (std::string)my->chain_config->genesis.initial_timestamp));
+   ilog("Blockchain started; head block is #${num}, genesis timestamp is ${ts}, core symbol is \"${cs}\"",
+        ("num", my->chain->head_block_num())("ts", (std::string)my->chain_config->genesis.initial_timestamp)("cs", symbol::core_symbol().to_string()));
 
    my->chain_config.reset();
+
+   if (my->exit_after_init_chain) {
+      wlog("Exit after initialize new blockchain with genesis state");
+      app().get_io_service().stop();
+   }
 } FC_CAPTURE_AND_RETHROW() }
 
 void chain_plugin::plugin_shutdown() {

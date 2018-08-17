@@ -37,6 +37,8 @@ namespace eosio {
 
 #define SY(P,X) ::eosio::chain::string_to_symbol_c(P,#X)
 
+      uint64_t core_symbol(const string& s = "");
+
       static uint64_t string_to_symbol(uint8_t precision, const char* str) {
          try {
             uint32_t len = 0;
@@ -63,12 +65,16 @@ namespace eosio {
 
             static constexpr uint8_t max_precision = 18;
 
+            static symbol core_symbol() {
+                return symbol(::eosio::chain::core_symbol());
+            }
             explicit symbol(uint8_t p, const char* s): m_value(string_to_symbol(p, s)) {
                EOS_ASSERT(valid(), symbol_type_exception, "invalid symbol: ${s}", ("s",s));
             }
-            explicit symbol(uint64_t v = CORE_SYMBOL): m_value(v) {
+            explicit symbol(uint64_t v): m_value(v) {
                EOS_ASSERT(valid(), symbol_type_exception, "invalid symbol: ${name}", ("name",name()));
             }
+            explicit symbol(): symbol(::eosio::chain::core_symbol())  {}
             static symbol from_string(const string& from)
             {
                try {

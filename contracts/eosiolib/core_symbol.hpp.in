@@ -5,3 +5,5 @@
  */
 
 #define CORE_SYMBOL S(4,${CORE_SYMBOL_NAME})
+
+#undef CORE_SYMBOL

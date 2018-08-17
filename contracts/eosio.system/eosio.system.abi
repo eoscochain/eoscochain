@@ -258,7 +258,8 @@
          {"name":"thresh_activated_stake_time",   "type":"uint64"},
          {"name":"last_producer_schedule_size",   "type":"uint16"},
          {"name":"total_producer_vote_weight",    "type":"float64"},
-         {"name":"last_name_close",               "type":"block_timestamp_type"}
+         {"name":"last_name_close",               "type":"block_timestamp_type"},
+         {"name":"max_producer_schedule_size",    "type":"uint8"}
       ]
     },{
       "name": "producer_info",
@@ -404,7 +405,13 @@
           {"name":"high_bid", "type":"int64"},
           {"name":"last_bid_time", "type":"uint64"}
        ]
-    }
+    }, {
+       "name": "setsched",
+       "base": "",
+       "fields": [
+         {"name":"sched_size", "type":"uint8"}
+       ]
+   }
    ],
    "actions": [{
      "name": "newaccount",
@@ -522,7 +529,11 @@
       "name": "setparams",
       "type": "setparams",
       "ricardian_contract": ""
-    }],
+    },{
+     "name": "setsched",
+     "type": "setsched",
+     "ricardian_contract": ""
+   }],
    "tables": [{
       "name": "producers",
       "type": "producer_info",

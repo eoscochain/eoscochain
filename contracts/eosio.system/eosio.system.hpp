@@ -9,6 +9,7 @@
 #include <eosiolib/time.hpp>
 #include <eosiolib/privileged.hpp>
 #include <eosiolib/singleton.hpp>
+#include <eosiolib/symbol.h>
 #include <eosio.system/exchange_state.hpp>
 
 #include <string>
@@ -53,12 +54,15 @@ namespace eosiosystem {
       double               total_producer_vote_weight = 0; /// the sum of all producer votes
       block_timestamp      last_name_close;
 
+      uint8_t              max_producer_schedule_size = 21;
+
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE_DERIVED( eosio_global_state, eosio::blockchain_parameters,
                                 (max_ram_size)(total_ram_bytes_reserved)(total_ram_stake)
                                 (last_producer_schedule_update)(last_pervote_bucket_fill)
                                 (pervote_bucket)(perblock_bucket)(total_unpaid_blocks)(total_activated_stake)(thresh_activated_stake_time)
-                                (last_producer_schedule_size)(total_producer_vote_weight)(last_name_close) )
+                                (last_producer_schedule_size)(total_producer_vote_weight)(last_name_close)
+                                (max_producer_schedule_size) )
    };
 
    struct producer_info {
@@ -123,7 +127,7 @@ namespace eosiosystem {
 
    //   static constexpr uint32_t     max_inflation_rate = 5;  // 5% annual inflation
    static constexpr uint32_t     seconds_per_day = 24 * 3600;
-   static constexpr uint64_t     system_token_symbol = CORE_SYMBOL;
+   uint64_t system_token_symbol();
 
    class system_contract : public native {
       private:
@@ -215,6 +219,9 @@ namespace eosiosystem {
          void rmvproducer( account_name producer );
 
          void bidname( account_name bidder, account_name newname, asset bid );
+
+         void setsched( uint8_t sched_size );
+
       private:
          void update_elected_producers( block_timestamp timestamp );
 
