@@ -1653,6 +1653,23 @@ class call_depth_api : public context_aware_api {
       }
 };
 
+/*
+ * This api will be removed with fix for missing `strtod`
+ */
+class strtod_api : public context_aware_api {
+public:
+    strtod_api(apply_context& ctx)
+    : context_aware_api(ctx, true) {}
+
+    double strtod(const char *nptr, char **endptr) {
+         return std::strtod(nptr, endptr);
+    }
+};
+
+REGISTER_INTRINSICS(strtod_api,
+   (strtod,  double(int, int)               )
+);
+
 REGISTER_INJECTED_INTRINSICS(call_depth_api,
    (call_depth_assert,  void()               )
 );

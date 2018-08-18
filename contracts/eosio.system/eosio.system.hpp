@@ -67,7 +67,7 @@ namespace eosiosystem {
                                 (last_producer_schedule_update)(last_pervote_bucket_fill)
                                 (pervote_bucket)(perblock_bucket)(total_unpaid_blocks)(total_activated_stake)(thresh_activated_stake_time)
                                 (last_producer_schedule_size)(total_producer_vote_weight)(last_name_close)
-                                (max_producer_schedule_size) )
+                                (max_producer_schedule_size)(min_pervote_daily_pay)(min_activated_stake)(continuous_rate)(to_producers_rate)(to_bpay_rate) )
    };
 
    struct producer_info {
