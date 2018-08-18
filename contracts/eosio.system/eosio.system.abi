@@ -411,6 +411,13 @@
        "fields": [
          {"name":"sched_size", "type":"uint8"}
        ]
+   }, {
+       "name": "setglobal",
+       "base": "",
+       "fields": [
+         {"name":"name", "type":"string"},
+         {"name":"value", "type":"string"}
+       ]
    }
    ],
    "actions": [{
@@ -530,9 +537,13 @@
       "type": "setparams",
       "ricardian_contract": ""
     },{
-     "name": "setsched",
-     "type": "setsched",
-     "ricardian_contract": ""
+      "name": "setsched",
+      "type": "setsched",
+      "ricardian_contract": ""
+   },{
+      "name": "setglobal",
+      "type": "setglobal",
+      "ricardian_contract": ""
    }],
    "tables": [{
       "name": "producers",

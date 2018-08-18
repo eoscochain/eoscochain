@@ -145,9 +145,54 @@ namespace eosiosystem {
       eosio_assert( sched_size >= 3 && sched_size <= 51, "producers number must be in range [3, 51]" ); // TODO
       eosio_assert( sched_size % 2 == 1, "producers number must be odd" );
 
-      eosio_assert( _gstate.total_activated_stake < min_activated_stake, "minimum activated stake has reached" );
+      eosio_assert( _gstate.total_activated_stake < 150'000'000'0000, "minimum activated stake has reached" );
 
       _gstate.max_producer_schedule_size = sched_size;
+   }
+
+   void system_contract::setglobal( std::string name, std::string value ) {
+      require_auth( _self );
+
+      eosio_assert( _gstate.total_activated_stake < _gstate.min_activated_stake, "minimum activated stake has reached" );
+
+      if (name == "max_producer_schedule_size") {
+         auto sched_size = std::stoi(value);
+
+         eosio_assert( sched_size >= 3 && sched_size <= 51, "producers number must be in range [3, 51]" ); // TODO
+         eosio_assert( sched_size % 2 == 1, "producers number must be odd" );
+
+         _gstate.max_producer_schedule_size = static_cast<uint8_t>(sched_size);
+      } else if (name == "min_pervote_daily_pay") {
+         auto min_vpay = std::stoll(value);
+
+         eosio_assert( min_vpay >= 0 && min_vpay <= 100'0000, "minimum pervote daily pay must be in range [0, 100'0000]" ); // TODO
+
+         _gstate.min_pervote_daily_pay = min_vpay;
+      } else if ( name == "min_activated_stake") {
+         auto min_activated_stake = std::stoll(value);
+
+         eosio_assert( min_activated_stake >= 0 && min_activated_stake <= 150'000'000'0000, "minimum activated stake must be in range [0, 150'000'000'0000]" ); // TODO
+
+         _gstate.min_activated_stake = min_activated_stake;
+      } else if ( name == "continuous_rate") {
+         auto rate = std::stod(value);
+
+         eosio_assert( rate >= 0 && rate <= 1, "continuous rate must be in range [0, 1]" ); // TODO
+
+         _gstate.continuous_rate = rate;
+      } else if ( name == "to_producers_rate") {
+         auto rate = std::stod(value);
+
+         eosio_assert( rate >= 0 && rate <= 1, "to_producers_rate must be in range [0, 1]" ); // TODO
+
+         _gstate.to_producers_rate = rate;
+      } else if ( name == "to_bpay_rate") {
+         auto rate = std::stod(value);
+
+         eosio_assert( rate >= 0 && rate <= 1, "to_bpay_rate must be in range [0, 1]" ); // TODO
+
+         _gstate.to_bpay_rate = rate;
+      }
    }
 
    /**

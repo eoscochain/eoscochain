@@ -4,11 +4,12 @@
 
 namespace eosiosystem {
 
-   const int64_t  min_pervote_daily_pay = 100'0000;
-   const int64_t  min_activated_stake   = 150'000'000'0000;
-   const double   continuous_rate       = 0.04879;          // 5% annual rate
-   const double   perblock_rate         = 0.0025;           // 0.25%
-   const double   standby_rate          = 0.0075;           // 0.75%
+   // const int64_t  min_pervote_daily_pay = 100'0000;
+   // const int64_t  min_activated_stake   = 150'000'000'0000;
+   // const double   continuous_rate       = 0.04879;          // 5% annual rate
+   // const double   perblock_rate         = 0.0025;           // 0.25%
+   // const double   standby_rate          = 0.0075;           // 0.75%
+
    const uint32_t blocks_per_year       = 52*7*24*2*3600;   // half seconds per year
    const uint32_t seconds_per_year      = 52*7*24*3600;
    const uint32_t blocks_per_day        = 2 * 24 * 3600;
@@ -23,7 +24,7 @@ namespace eosiosystem {
       require_auth(N(eosio));
 
       /** until activated stake crosses this threshold no new rewards are paid */
-      if( _gstate.total_activated_stake < min_activated_stake )
+      if( _gstate.total_activated_stake < _gstate.min_activated_stake )
          return;
 
       if( _gstate.last_pervote_bucket_fill == 0 )  /// start the presses
@@ -71,7 +72,7 @@ namespace eosiosystem {
       const auto& prod = _producers.get( owner );
       eosio_assert( prod.active(), "producer does not have an active key" );
 
-      eosio_assert( _gstate.total_activated_stake >= min_activated_stake,
+      eosio_assert( _gstate.total_activated_stake >= _gstate.min_activated_stake,
                     "cannot claim rewards until the chain is activated (at least 15% of all tokens participate in voting)" );
 
       auto ct = current_time();
@@ -82,11 +83,11 @@ namespace eosiosystem {
       const auto usecs_since_last_fill = ct - _gstate.last_pervote_bucket_fill;
 
       if( usecs_since_last_fill > 0 && _gstate.last_pervote_bucket_fill > 0 ) {
-         auto new_tokens = static_cast<int64_t>( (continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
+         auto new_tokens = static_cast<int64_t>( (_gstate.continuous_rate * double(token_supply.amount) * double(usecs_since_last_fill)) / double(useconds_per_year) );
 
-         auto to_producers       = new_tokens / 5;
+         auto to_producers       = static_cast<int64_t>( new_tokens * _gstate.to_producers_rate );
          auto to_savings         = new_tokens - to_producers;
-         auto to_per_block_pay   = to_producers / 4;
+         auto to_per_block_pay   = static_cast<int64_t>( to_producers * _gstate.to_bpay_rate );
          auto to_per_vote_pay    = to_producers - to_per_block_pay;
 
          INLINE_ACTION_SENDER(eosio::token, issue)( N(eosio.token), {{N(eosio),N(active)}},
@@ -115,7 +116,7 @@ namespace eosiosystem {
       if( _gstate.total_producer_vote_weight > 0 ) {
          producer_per_vote_pay  = int64_t((_gstate.pervote_bucket * prod.total_votes ) / _gstate.total_producer_vote_weight);
       }
-      if( producer_per_vote_pay < min_pervote_daily_pay ) {
+      if( producer_per_vote_pay < _gstate.min_pervote_daily_pay ) {
          producer_per_vote_pay = 0;
       }
       _gstate.pervote_bucket      -= producer_per_vote_pay;

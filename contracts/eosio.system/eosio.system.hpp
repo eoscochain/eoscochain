@@ -55,6 +55,11 @@ namespace eosiosystem {
       block_timestamp      last_name_close;
 
       uint8_t              max_producer_schedule_size = 21;
+      int64_t              min_pervote_daily_pay      = 100'0000;
+      int64_t              min_activated_stake        = 150'000'000'0000;
+      double              continuous_rate            = 0.04879; // 5% annual rate
+      double              to_producers_rate          = 0.2;
+      double              to_bpay_rate               = 0.25;
 
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE_DERIVED( eosio_global_state, eosio::blockchain_parameters,
@@ -221,6 +226,8 @@ namespace eosiosystem {
          void bidname( account_name bidder, account_name newname, asset bid );
 
          void setsched( uint8_t sched_size );
+
+         void setglobal( std::string name, std::string value );
 
       private:
          void update_elected_producers( block_timestamp timestamp );
