@@ -348,6 +348,7 @@ struct controller_impl {
 
       db.add_index<global_property_multi_index>();
       db.add_index<dynamic_global_property_multi_index>();
+      db.add_index<core_symbol_multi_index>();
       db.add_index<block_summary_multi_index>();
       db.add_index<transaction_multi_index>();
       db.add_index<generated_transaction_multi_index>();
@@ -438,13 +439,9 @@ struct controller_impl {
       });
       db.create<dynamic_global_property_object>([](auto&){});
 
-      ilog("11111");
       db.create<core_symbol_object>([](auto& cs){
-          ilog("22222");
          cs.core_symbol = core_symbol();
-          ilog("33333");
       });
-      ilog("44444");
 
       authorization.initialize_database();
       resource_limits.initialize_database();
@@ -1390,7 +1387,6 @@ void controller::startup() {
       elog( "No head block in fork db, perhaps we need to replay" );
    }
    my->init();
-   ilog("xxxxxx");
    core_symbol(symbol(get_core_symbol().core_symbol).name());
 }
 
