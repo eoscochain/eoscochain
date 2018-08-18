@@ -225,8 +225,6 @@ namespace eosiosystem {
 
          void bidname( account_name bidder, account_name newname, asset bid );
 
-         void setsched( uint8_t sched_size );
-
          void setglobal( std::string name, std::string value );
 
       private:

@@ -13,7 +13,6 @@ namespace eosio { namespace chain {
 genesis_state::genesis_state() {
    initial_timestamp = fc::time_point::from_iso_string( "2018-06-01T12:00:00" );
    initial_key = fc::variant(eosio_root_key).as<public_key_type>();
-   core_symbol = "SYS";
 }
 
 chain::chain_id_type genesis_state::compute_chain_id() const {

@@ -411,12 +411,6 @@
           {"name":"last_bid_time", "type":"uint64"}
        ]
     }, {
-       "name": "setsched",
-       "base": "",
-       "fields": [
-         {"name":"sched_size", "type":"uint8"}
-       ]
-   }, {
        "name": "setglobal",
        "base": "",
        "fields": [
@@ -540,10 +534,6 @@
     },{
       "name": "setparams",
       "type": "setparams",
-      "ricardian_contract": ""
-    },{
-      "name": "setsched",
-      "type": "setsched",
       "ricardian_contract": ""
    },{
       "name": "setglobal",

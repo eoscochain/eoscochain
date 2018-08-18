@@ -11,6 +11,7 @@
 #include <eosio/chain/wasm_eosio_validation.hpp>
 #include <eosio/chain/wasm_eosio_injection.hpp>
 #include <eosio/chain/global_property_object.hpp>
+#include <eosio/chain/core_symbol_object.hpp>
 #include <eosio/chain/account_object.hpp>
 #include <eosio/chain/symbol.hpp>
 #include <fc/exception/exception.hpp>
@@ -986,6 +987,18 @@ class core_symbol_api : public context_aware_api {
       uint64_t core_symbol() {
          return ::eosio::chain::core_symbol();
       }
+
+      void set_core_symbol(array_ptr<const char> str, size_t str_len) {
+         auto s = ::eosio::chain::core_symbol(string(str, str_len));
+
+         auto& original = context.control.get_core_symbol();
+         EOS_ASSERT(s != original.core_symbol, symbol_type_exception, "core symbol not changed");
+
+         context.db.modify( original,
+            [&]( auto& cs ) {
+                 cs.core_symbol = s;
+         });
+      }   
 };
 
 class console_api : public context_aware_api {
@@ -1835,6 +1848,7 @@ REGISTER_INTRINSICS(authorization_api,
 
 REGISTER_INTRINSICS(core_symbol_api,
    (core_symbol, int64_t())
+   (set_core_symbol, void(int, int))
 );
 
 REGISTER_INTRINSICS(console_api,

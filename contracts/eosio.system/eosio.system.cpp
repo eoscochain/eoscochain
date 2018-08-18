@@ -139,17 +139,6 @@ namespace eosiosystem {
       }
    }
 
-   void system_contract::setsched( uint8_t sched_size ) {
-      require_auth( _self );
-
-      eosio_assert( sched_size >= 3 && sched_size <= 51, "producers number must be in range [3, 51]" ); // TODO
-      eosio_assert( sched_size % 2 == 1, "producers number must be odd" );
-
-      eosio_assert( _gstate.total_activated_stake < 150'000'000'0000, "minimum activated stake has reached" );
-
-      _gstate.max_producer_schedule_size = sched_size;
-   }
-
    void system_contract::setglobal( std::string name, std::string value ) {
       require_auth( _self );
 
@@ -249,7 +238,7 @@ EOSIO_ABI( eosiosystem::system_contract,
      // native.hpp (newaccount definition is actually in eosio.system.cpp)
      (newaccount)(updateauth)(deleteauth)(linkauth)(unlinkauth)(canceldelay)(onerror)
      // eosio.system.cpp
-     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setsched)(setglobal)
+     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setglobal)
      // delegate_bandwidth.cpp
      (buyrambytes)(buyram)(sellram)(delegatebw)(undelegatebw)(refund)
      // voting.cpp

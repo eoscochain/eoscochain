@@ -26,6 +26,7 @@ namespace eosio { namespace chain {
 
    class dynamic_global_property_object;
    class global_property_object;
+   class core_symbol_object;
    class permission_object;
    class account_object;
    using resource_limits::resource_limits_manager;
@@ -149,6 +150,7 @@ namespace eosio { namespace chain {
          const account_object&                 get_account( account_name n )const;
          const global_property_object&         get_global_properties()const;
          const dynamic_global_property_object& get_dynamic_global_properties()const;
+         const core_symbol_object& get_core_symbol()const;
          const permission_object&              get_permission( const permission_level& level )const;
          const resource_limits_manager&        get_resource_limits_manager()const;
          resource_limits_manager&              get_mutable_resource_limits_manager();

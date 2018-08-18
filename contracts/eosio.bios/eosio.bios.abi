@@ -166,6 +166,12 @@
       "fields": [
         {"name":"from", "type":"account_name"}
       ]
+    },{
+      "name": "set_core",
+      "base": "",
+      "fields": [
+        {"name":"symbol", "type":"string"}
+      ]
     }],
    "actions": [{
       "name": "newaccount",
@@ -223,6 +229,10 @@
       "name": "reqauth",
       "type": "require_auth",
       "ricardian_contract": ""
+    },{
+     "name": "setcore",
+     "type": "set_core",
+     "ricardian_contract": ""
     }
    ],
    "tables": [],

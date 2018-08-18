@@ -1,6 +1,7 @@
 #pragma once
 #include <eosiolib/eosio.hpp>
 #include <eosiolib/privileged.hpp>
+#include <eosiolib/symbol.h>
 
 namespace eosio {
 
@@ -36,6 +37,12 @@ namespace eosio {
 
          void reqauth( action_name from ) {
             require_auth( from );
+         }
+
+         void setcore( std::string symbol) {
+             require_auth( _self );
+
+             set_core_symbol(symbol.c_str(), symbol.size());
          }
 
       private:

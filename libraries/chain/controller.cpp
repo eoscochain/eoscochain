@@ -5,9 +5,12 @@
 #include <eosio/chain/fork_database.hpp>
 #include <eosio/chain/exceptions.hpp>
 
+#include <eosio/chain/symbol.hpp>
+
 #include <eosio/chain/account_object.hpp>
 #include <eosio/chain/block_summary_object.hpp>
 #include <eosio/chain/global_property_object.hpp>
+#include <eosio/chain/core_symbol_object.hpp>
 #include <eosio/chain/contract_table_objects.hpp>
 #include <eosio/chain/generated_transaction_object.hpp>
 #include <eosio/chain/transaction_object.hpp>
@@ -434,6 +437,14 @@ struct controller_impl {
         gpo.configuration = conf.genesis.initial_configuration;
       });
       db.create<dynamic_global_property_object>([](auto&){});
+
+      ilog("11111");
+      db.create<core_symbol_object>([](auto& cs){
+          ilog("22222");
+         cs.core_symbol = core_symbol();
+          ilog("33333");
+      });
+      ilog("44444");
 
       authorization.initialize_database();
       resource_limits.initialize_database();
@@ -1379,6 +1390,8 @@ void controller::startup() {
       elog( "No head block in fork db, perhaps we need to replay" );
    }
    my->init();
+   ilog("xxxxxx");
+   core_symbol(symbol(get_core_symbol().core_symbol).name());
 }
 
 chainbase::database& controller::db()const { return my->db; }
@@ -1540,6 +1553,10 @@ const dynamic_global_property_object& controller::get_dynamic_global_properties(
 }
 const global_property_object& controller::get_global_properties()const {
   return my->db.get<global_property_object>();
+}
+
+const core_symbol_object& controller::get_core_symbol()const {
+   return my->db.get<core_symbol_object>();
 }
 
 signed_block_ptr controller::fetch_block_by_id( block_id_type id )const {

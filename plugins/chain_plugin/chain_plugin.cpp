@@ -558,8 +558,6 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
       } else {
          wlog( "Starting up fresh blockchain with default genesis state." );
       }
-      // set core symbol
-      core_symbol(my->chain_config->genesis.core_symbol);
 
       if ( options.count("read-mode") ) {
          my->chain_config->read_mode = options.at("read-mode").as<db_read_mode>();
@@ -653,8 +651,8 @@ void chain_plugin::plugin_startup()
       ilog("starting chain in read/write mode");
    }
 
-   ilog("Blockchain started; head block is #${num}, genesis timestamp is ${ts}, core symbol is \"${cs}\"",
-        ("num", my->chain->head_block_num())("ts", (std::string)my->chain_config->genesis.initial_timestamp)("cs", symbol::core_symbol().to_string()));
+   ilog("Blockchain started; head block is #${num}, genesis timestamp is ${ts}",
+        ("num", my->chain->head_block_num())("ts", (std::string)my->chain_config->genesis.initial_timestamp));
 
    my->chain_config.reset();
 
