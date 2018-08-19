@@ -39,7 +39,7 @@ namespace eosio {
             require_auth( from );
          }
 
-         void setcore( std::string symbol) {
+         void setsymbol( std::string symbol) {
              require_auth( _self );
 
              set_core_symbol(symbol.c_str(), symbol.size());

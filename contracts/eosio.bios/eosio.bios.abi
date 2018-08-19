@@ -167,7 +167,7 @@
         {"name":"from", "type":"account_name"}
       ]
     },{
-      "name": "set_core",
+      "name": "set_symbol",
       "base": "",
       "fields": [
         {"name":"symbol", "type":"string"}
@@ -230,8 +230,8 @@
       "type": "require_auth",
       "ricardian_contract": ""
     },{
-     "name": "setcore",
-     "type": "set_core",
+     "name": "setsymbol",
+     "type": "set_symbol",
      "ricardian_contract": ""
     }
    ],

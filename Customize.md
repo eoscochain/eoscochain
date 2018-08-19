@@ -5,7 +5,7 @@
 #### eosio.bios
 
 新增：
-- setcore: 原生币符号的设定不再依赖编译宏`CORE_SYMBOL`（重设需要编译），可在bios阶段调用setcore进行设置，将被写入状态数据库。
+- setsymbol: 原生币符号的设定不再依赖编译宏`CORE_SYMBOL`（重设需要编译），可在bios阶段调用setsymbol进行设置，将被写入状态数据库。
 
 #### eosio.system
 
