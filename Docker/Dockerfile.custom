@@ -1,5 +1,5 @@
 FROM cochain/eos-builder as builder
-ARG branch=release
+ARG branch=master
 ARG symbol=EOC
 
 RUN git clone -b $branch https://github.com/eoscochain/eoscochain.git eos --recursive
