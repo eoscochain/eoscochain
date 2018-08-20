@@ -67,7 +67,7 @@ FIND_LIBRARY(
 MARK_AS_ADVANCED(ODB_BOOST_LIBRARY)
 
 FIND_LIBRARY(ODB_MYSQL_CLIENT_LIBRARY
-        NAMES mysqlclient.${ODB_SUFFIX} libmysqlclient.${ODB_SUFFIX}
+        NAMES mysqlclient libmysqlclient
         PATHS /usr/lib64/mysql /usr/lib/mysql /usr/lib/x86_64-linux-gnu)
 
 MESSAGE(STATUS "Odb found ${ODB_LIBRARY} ${ODB_MYSQL_LIBRARY} ${ODB_BOOST_LIBRARY} ${ODB_MYSQL_CLIENT_LIBRARY}")
