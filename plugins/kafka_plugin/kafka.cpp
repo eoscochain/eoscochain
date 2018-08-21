@@ -55,6 +55,9 @@ void kafka::start() {
     stopped_ = false;
     producer_ = std::make_unique<Producer>(config_);
 
+    auto conf = producer_->get_configuration().get_all();
+    ilog("Kafka config: ${conf}", ("conf", conf));
+
     consume_block_thread_ = std::thread([=] {
         loop_handle(stopped_, "consume blocks", [=] { consume_blocks(); });
     });
