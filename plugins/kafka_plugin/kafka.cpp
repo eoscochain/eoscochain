@@ -190,7 +190,7 @@ void kafka::consume_blocks() {
     }
 
     for (auto& p: distinct_blocks_by_num) {
-        auto payload = fc::json::to_string(*p.second, fc::json::stringify_large_ints_and_doubles);
+        auto payload = fc::json::to_string(*p.second, fc::json::legacy_generator);
         Buffer buffer (p.second->id.data(), p.second->id.size());
         producer_->produce(MessageBuilder(block_topic_).key(buffer).payload(payload));
     }
@@ -206,7 +206,7 @@ void kafka::consume_transactions() {
         if (distinct_txs.count(tx->id)) continue;
         distinct_txs[tx->id] = tx;
 
-        auto payload = fc::json::to_string(*tx, fc::json::stringify_large_ints_and_doubles);
+        auto payload = fc::json::to_string(*tx, fc::json::legacy_generator);
         Buffer buffer (tx->id.data(), tx->id.size());
         producer_->produce(MessageBuilder(tx_topic_).key(buffer).payload(payload));
     }
@@ -222,7 +222,7 @@ void kafka::consume_transaction_traces() {
         if (distinct_txs.count(tx->id)) continue;
         distinct_txs[tx->id] = tx;
 
-        auto payload = fc::json::to_string(*tx, fc::json::stringify_large_ints_and_doubles);
+        auto payload = fc::json::to_string(*tx, fc::json::legacy_generator);
         Buffer buffer (tx->id.data(), tx->id.size());
         producer_->produce(MessageBuilder(tx_trace_topic_).key(buffer).payload(payload));
     }
@@ -238,7 +238,7 @@ void kafka::consume_actions() {
         if (distinct_actions.count(action->global_seq)) continue; // deduplicate
         distinct_actions[action->global_seq] = action;
 
-        auto payload = fc::json::to_string(*action, fc::json::stringify_large_ints_and_doubles);
+        auto payload = fc::json::to_string(*action, fc::json::legacy_generator);
         Buffer buffer((char*)&action->global_seq, sizeof(action->global_seq));
         producer_->produce(MessageBuilder(action_topic_).key(buffer).payload(payload));
     }
