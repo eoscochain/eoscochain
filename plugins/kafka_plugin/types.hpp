@@ -84,4 +84,4 @@ FC_REFLECT_ENUM(kafka::TransactionStatus, (executed)(soft_fail)(hard_fail)(delay
 FC_REFLECT(kafka::Block, (id)(num)(timestamp)(block)(tx_count)(action_count)(context_free_action_count))
 FC_REFLECT(kafka::Transaction, (id)(block_id)(block_num)(block_time)(block_seq)(action_count)(context_free_action_count))
 FC_REFLECT(kafka::TransactionTrace, (id)(scheduled)(status)(net_usage_words)(cpu_usage_us)(exception))
-FC_REFLECT(kafka::Action, (global_seq)(account_seq)(parent_seq)(account)(name)(auth)(data)(receiver)(auth_seq)(code_seq)(abi_seq)(tx_id)(console))
+FC_REFLECT(kafka::Action, (global_seq)(recv_seq)(parent_seq)(account)(name)(auth)(data)(receiver)(auth_seq)(code_seq)(abi_seq)(tx_id)(console))
