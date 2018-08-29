@@ -154,7 +154,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     auto a = std::make_shared<Action>();
 
     a->global_seq = action_trace.receipt.global_sequence;
-    a->account_seq = action_trace.receipt.recv_sequence;
+    a->recv_seq = action_trace.receipt.recv_sequence;
     a->parent_seq = parent_seq;
     a->account = action_trace.act.account;
     a->name = action_trace.act.name;

@@ -53,7 +53,7 @@ struct TransactionTrace { // new ones will override old ones, typically when sta
 
 struct Action {
     uint64_t global_seq; // the global sequence number of this action
-    uint64_t account_seq; // the sequence number of this action for its account
+    uint64_t recv_seq; // the sequence number of this action for this receiver
 
     uint64_t parent_seq; // parent action trace global sequence number, only for inline traces
 
