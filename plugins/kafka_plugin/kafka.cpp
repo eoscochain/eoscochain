@@ -88,6 +88,8 @@ void kafka::stop() {
     if (consume_transaction_trace_thread_.joinable()) consume_transaction_trace_thread_.join();
     if (consume_action_thread_.joinable()) consume_action_thread_.join();
 
+    producer_->flush();
+
     producer_.reset();
 }
 
