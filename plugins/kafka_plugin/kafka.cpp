@@ -172,7 +172,7 @@ void kafka::consume_transaction_trace(TransactionTracePtr tx_trace) {
 
 void kafka::consume_action(ActionPtr action) {
     auto payload = fc::json::to_string(*action, fc::json::legacy_generator);
-    Buffer buffer((char*)action->global_seq, sizeof(action->global_seq));
+    Buffer buffer((char*)&action->global_seq, sizeof(action->global_seq));
     producer_->produce(MessageBuilder(action_topic_).key(buffer).payload(payload));
 }
 
