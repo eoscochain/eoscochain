@@ -511,7 +511,7 @@ void mysql_db_plugin::plugin_initialize(const variables_map& options) {
     my->init();
 
     std::vector<std::string> filter_token_contracts;
-    if(options.count("mysql-filter-token-contract")) {
+    if (options.count("mysql-filter-token-contract")) {
         filter_token_contracts = options["mysql-filter-token-contract"].as<std::vector<std::string>>();
     }
     my->action_handlers_.push_back(std::make_shared<token_transfer_handler>(filter_token_contracts, my->db_));
