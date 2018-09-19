@@ -1,9 +1,11 @@
 #pragma once
 
+#include <random>
+
 namespace eosio {
 
-void srand( uint32_t seed );
+   std::seed_seq seed_time_and_transaction();
 
-int rand();
+   std::mt19937 random_engine(std::seed_seq& seed);
 
 }
