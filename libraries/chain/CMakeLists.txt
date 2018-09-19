@@ -41,6 +41,8 @@ add_library( eosio_chain
 
               symbol.cpp
 
+              random.cpp
+
 #             get_config.cpp
 #             global_property_object.cpp
 #

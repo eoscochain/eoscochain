@@ -361,6 +361,10 @@ bytes apply_context::get_packed_transaction() {
    return r;
 }
 
+transaction_id_type apply_context::get_transaction_id() {
+   return static_cast<const transaction&>(trx_context.trx).id();
+}
+
 void apply_context::update_db_usage( const account_name& payer, int64_t delta ) {
    if( delta > 0 ) {
       if( !(privileged || payer == account_name(receiver)) ) {

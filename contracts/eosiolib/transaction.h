@@ -94,6 +94,8 @@ extern "C" {
     */
    size_t transaction_size();
 
+   void transaction_id( transaction_id_type* id );
+
    /**
     * Gets the block number used for TAPOS on the currently executing transaction.
     *

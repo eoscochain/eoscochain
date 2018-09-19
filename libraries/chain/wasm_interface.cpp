@@ -1384,6 +1384,10 @@ class context_free_transaction_api : public context_aware_api {
          return context.get_packed_transaction().size();
       }
 
+      void transaction_id( fc::sha256& id ) {
+         id = context.get_transaction_id();
+      }
+
       int expiration() {
         return context.trx_context.trx.expiration.sec_since_epoch();
       }
@@ -1868,6 +1872,7 @@ REGISTER_INTRINSICS(console_api,
 REGISTER_INTRINSICS(context_free_transaction_api,
    (read_transaction,       int(int, int)            )
    (transaction_size,       int()                    )
+   (transaction_id,         void(int)                )
    (expiration,             int()                    )
    (tapos_block_prefix,     int()                    )
    (tapos_block_num,        int()                    )

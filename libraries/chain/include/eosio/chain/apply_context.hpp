@@ -567,6 +567,7 @@ class apply_context {
       int get_context_free_data( uint32_t index, char* buffer, size_t buffer_size )const;
       vector<account_name> get_active_producers() const;
       bytes  get_packed_transaction();
+      transaction_id_type get_transaction_id();
 
       uint64_t next_global_sequence();
       uint64_t next_recv_sequence( account_name receiver );
