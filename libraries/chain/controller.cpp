@@ -88,6 +88,8 @@ struct pending_state {
 
    optional<block_id_type>            _producer_block_id;
 
+   std::function<signature_type(digest_type)> _signer;
+
    void push() {
       _db_session.push();
    }
@@ -883,7 +885,7 @@ struct controller_impl {
 
 
    void start_block( block_timestamp_type when, uint16_t confirm_block_count, controller::block_status s,
-                     const optional<block_id_type>& producer_block_id )
+                     const optional<block_id_type>& producer_block_id, std::function<signature_type(digest_type)> signer = nullptr )
    {
       EOS_ASSERT( !pending, block_validate_exception, "pending block already exists" );
 
@@ -902,6 +904,7 @@ struct controller_impl {
 
       pending->_block_status = s;
       pending->_producer_block_id = producer_block_id;
+      pending->_signer = signer;
       pending->_pending_block_state = std::make_shared<block_state>( *head, when ); // promotes pending schedule (if any) to active
       pending->_pending_block_state->in_current_chain = true;
 
@@ -969,7 +972,9 @@ struct controller_impl {
 
    void apply_block( const signed_block_ptr& b, controller::block_status s ) { try {
       try {
-         EOS_ASSERT( b->block_extensions.size() == 0, block_validate_exception, "no supported extensions" );
+         // EOS_ASSERT( b->block_extensions.size() == 0, block_validate_exception, "no supported extensions" );
+         pending->_pending_block_state->block->block_extensions = b->block_extensions;
+
          auto producer_block_id = b->id();
          start_block( b->timestamp, b->confirmed, s , producer_block_id);
 
@@ -1414,9 +1419,9 @@ chainbase::database& controller::db()const { return my->db; }
 fork_database& controller::fork_db()const { return my->fork_db; }
 
 
-void controller::start_block( block_timestamp_type when, uint16_t confirm_block_count) {
+void controller::start_block( block_timestamp_type when, uint16_t confirm_block_count, std::function<signature_type(digest_type)> signer) {
    validate_db_available_size();
-   my->start_block(when, confirm_block_count, block_status::incomplete, optional<block_id_type>() );
+   my->start_block(when, confirm_block_count, block_status::incomplete, optional<block_id_type>(), signer );
 }
 
 void controller::finalize_block() {
@@ -1551,6 +1556,11 @@ time_point controller::pending_block_time()const {
 optional<block_id_type> controller::pending_producer_block_id()const {
    EOS_ASSERT( my->pending, block_validate_exception, "no pending block" );
    return my->pending->_producer_block_id;
+}
+
+std::function<signature_type(digest_type)> controller::pending_producer_signer()const {
+   EOS_ASSERT( my->pending, block_validate_exception, "no pending block" );
+   return my->pending->_signer;
 }
 
 uint32_t controller::last_irreversible_block_num() const {
