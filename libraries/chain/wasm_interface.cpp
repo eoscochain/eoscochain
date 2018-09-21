@@ -1698,7 +1698,7 @@ public:
 
       auto block_state = context.control.pending_block_state();
       for (auto& extension: block_state->block->block_extensions) {
-         if (extension.first != static_cast<uint16_t>(block_extension_type::producer_signature)) continue;
+         if (extension.first != static_cast<uint16_t>(block_extension_type::producer_random_seed)) continue;
          EOS_ASSERT(extension.second.size() > 32, transaction_exception, "invalid producer signature in block extensions");
 
          transaction_id_type tx_id(extension.second.data(), 32);
@@ -1717,11 +1717,14 @@ public:
          EOS_ASSERT( check == block_state->block_signing_key, transaction_exception, "wrong expected key different than recovered key" );
       }
 
+      bool sign = false;
+
       if (context.control.is_producing_block()) {
          // Producer is producing this block
          auto signer = context.control.pending_producer_signer();
          if (signer) {
             signature = signer(digest);
+            sign = true;
          }
       }
 
@@ -1734,6 +1737,16 @@ public:
       if (sig_size <= siglen) {
          datastream<char*> ds(sig, sig_size);
          fc::raw::pack(ds, s);
+
+         if (sign) {
+            block_state->block->block_extensions.emplace_back();
+            auto &extension = block_state->block->block_extensions.back();
+            extension.first = static_cast<uint16_t>(block_extension_type::producer_random_seed);
+            extension.second.resize(32 + sig_size);
+            std::copy(context.trx_context.id.data(), context.trx_context.id.data() + 32, extension.second.data());
+            std::copy((char*)sig, (char*)sig + sig_size, extension.second.data() + 32);
+         }
+
          return sig_size;
       }
       return 0;
