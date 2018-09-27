@@ -982,7 +982,7 @@ class action_api : public context_aware_api {
 class core_symbol_api : public context_aware_api {
    public:
       core_symbol_api( apply_context& ctx )
-      : context_aware_api(ctx,true) {}
+      : context_aware_api(ctx) {}
 
       uint64_t core_symbol() {
          return ::eosio::chain::core_symbol();
@@ -1686,7 +1686,7 @@ public:
 class producer_random_seed_api : public context_aware_api {
 public:
    producer_random_seed_api(apply_context& ctx)
-   : context_aware_api(ctx, true) {}
+   : context_aware_api(ctx) {}
 
    int producer_random_seed(array_ptr<char> sig, size_t siglen) {
       auto data = timestamp_txid();
