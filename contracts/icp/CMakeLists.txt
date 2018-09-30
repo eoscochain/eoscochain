@@ -8,7 +8,7 @@ add_wast_library(TARGET icplib
 )
 
 add_wast_executable(TARGET icp
-  SOURCE_FILES icp.cpp fork.cpp merkle.cpp
+  SOURCE_FILES icp.cpp fork.cpp merkle.cpp types.cpp
   INCLUDE_FOLDERS "${STANDARD_INCLUDE_FOLDERS}"
   LIBRARIES icplib libc++ libc eosiolib
   DESTINATION_FOLDER ${CMAKE_CURRENT_BINARY_DIR}

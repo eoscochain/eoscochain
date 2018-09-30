@@ -34,6 +34,14 @@ bool operator!=(const producer_key& lhs, const producer_key& rhs) {
     return std::tie(lhs.producer_name, lhs.block_signing_key) != std::tie(rhs.producer_name, rhs.block_signing_key);
 }
 
+bool operator==(const checksum256& lhs, const checksum256& rhs) {
+    return std::equal(std::cbegin(lhs.hash), std::cend(lhs.hash), std::cbegin(rhs.hash), std::cend(rhs.hash));
+}
+
+bool operator!=(const checksum256& lhs, const checksum256& rhs) {
+    return !std::equal(std::cbegin(lhs.hash), std::cend(lhs.hash), std::cbegin(rhs.hash), std::cend(rhs.hash));
+}
+
 using boost::container::flat_map;
 
 using checksum256_ptr = std::shared_ptr<checksum256>;
@@ -60,6 +68,10 @@ struct block_header {
     static uint32_t num_from_id(const block_id_type& id);
     uint32_t block_num() const;
     block_id_type id() const;
+
+   // explicit serialization macro is not necessary, used here only to improve compilation time
+   EOSLIB_SERIALIZE(block_header, (timestamp)(producer)(confirmed)(previous)(transaction_mroot)(action_mroot)
+                                  (schedule_version)(new_producers)(header_extensions))
 };
 
 using block_header_ptr = std::shared_ptr<block_header>;
@@ -68,6 +80,9 @@ struct header_confirmation {
     block_id_type block_id;
     account_name producer;
     checksum256 producer_signature;
+
+   // explicit serialization macro is not necessary, used here only to improve compilation time
+   EOSLIB_SERIALIZE(header_confirmation, (block_id)(producer)(producer_signature))
 };
 
 struct block_header_state {
@@ -106,6 +121,12 @@ struct block_header_state {
 
     producer_key get_scheduled_producer(block_timestamp_type t) const;
     uint32_t calc_dpos_last_irreversible() const;
+
+   // explicit serialization macro is not necessary, used here only to improve compilation time
+   EOSLIB_SERIALIZE(block_header_state, (id)(block_num)(header)(blockroot_merkle)(pending_schedule_hash)(block_signing_key)
+                                        (producer_signature)(dpos_proposed_irreversible_blocknum)(dpos_irreversible_blocknum)
+                                        (bft_irreversible_blocknum)(pending_schedule_lib_num)(pending_schedule)(active_schedule)
+                                        (producer_to_last_produced)(producer_to_last_implied_irb)(confirm_count)(confirmations))
 };
 
 using block_header_state_ptr = std::shared_ptr<block_header_state>;
@@ -114,7 +135,10 @@ struct block_header_with_merkle_path {
     block_header_state block_header;
     vector<block_id_type> merkle_path;
 
-    void validate(const digest_type& root) const;
+    // void validate(const digest_type& root) const;
+
+   // explicit serialization macro is not necessary, used here only to improve compilation time
+   EOSLIB_SERIALIZE(block_header_with_merkle_path, (block_header)(merkle_path))
 };
 
 struct action_receipt {
@@ -127,14 +151,9 @@ struct action_receipt {
     uint32_t abi_sequence;
 
     digest_type digest() const { return sha256(*this); }
-};
 
-// @abi table icpaction i64
-struct icpaction {
-    bytes action;
-    bytes action_receipt;
-    block_id_type block_id;
-    vector<checksum256> merkle_path;
+   // explicit serialization macro is not necessary, used here only to improve compilation time
+   EOSLIB_SERIALIZE(action_receipt, (receiver)(act_digest)(global_sequence)(recv_sequence)(auth_sequence)(code_sequence)(abi_sequence))
 };
 
 /* Accelerate compilation of `unpack`, other than only depends on boost::pfr.
@@ -177,5 +196,60 @@ block_header_with_merkle_path unpack<block_header_with_merkle_path>(const char* 
 
     return std::move(m);
 }
+
+// @abi table icp_action i64
+struct icp_action {
+   bytes action;
+   bytes action_receipt;
+   block_id_type block_id;
+   vector<checksum256> merkle_path;
+
+   // explicit serialization macro is not necessary, used here only to improve compilation time
+   EOSLIB_SERIALIZE(icp_action, (action)(action_receipt)(block_id)(merkle_path))
+};
+
+struct icp_packet {
+    uint64_t seq; // strictly increasing sequence
+    // account_name from; // the icp sender on the source chain
+    // account_name to; // the icp receiver on the destination chain
+    uint32_t expiration; // the expiration time in comparison to current block timestamp on destination chain, in seconds
+    bytes send_action;
+    bytes receipt_action; // includes `account` and `name`, but no `authorization` or `data`
+    uint8_t status;
+
+    bool shadow = false;
+
+    uint64_t primary_key() const { return seq; }
+};
+
+enum class receipt_status : uint8_t {
+    unknown = 0,
+    executed = 1,
+    expired = 2
+    // failed = 3
+};
+
+struct icp_receipt {
+    uint64_t seq; // strictly increasing sequence
+    uint64_t pseq; // sequence of the corresponding icp_packet
+    // account_name from; // corresponding to the icp receiver of the icp_packet on the destination chain
+    // account_name to; // corresponding to the icp sender of the icp_packet on the source chain
+    uint8_t status;
+    bytes data; // extra data
+
+    bool shadow = false;
+
+    uint64_t primary_key() const { return seq; }
+    uint64_t by_pseq() const { return pseq; }
+};
+
+struct icp_cleanup {
+   vector<uint64_t> seqs;
+};
+
+typedef eosio::multi_index<N(packets), icp_packet> packet_table;
+typedef eosio::multi_index<N(receipts), icp_receipt,
+                           indexed_by<N(pseq), const_mem_fun<icp_receipt, uint64_t, &icp_receipt::by_pseq>
+                           > receipt_table;
 
 }
