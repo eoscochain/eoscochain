@@ -263,7 +263,7 @@ producer_schedule fork_store::get_producer_schedule() {
 }
 
 void fork_store::update_active_schedule(const producer_schedule &schedule, bool clear_pending) {
-    _active_schedule.set(schedule, _code); // TODO: payer
+    _active_schedule.set(schedule, _code);
 
     if (clear_pending) {
         auto s = _pending_schedule.get();

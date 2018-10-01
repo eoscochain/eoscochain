@@ -48,6 +48,9 @@ private:
     bytes extract_action(const icp_action& ia);
     void update_peer();
 
+    void meter_add_packets(uint32_t num);
+    void meter_remove_packets(uint32_t num = std::numeric_limits<uint32_t>::max());
+
     struct peer_contract {
         account_name peer = 0;
         uint64_t last_outgoing_packet_seq = 0;
@@ -56,7 +59,13 @@ private:
         uint64_t last_incoming_receipt_seq = 0; // to validate
     };
 
+    struct icp_meter {
+        uint32_t max_packets;
+        uint32_t current_packets;
+    };
+
     typedef eosio::singleton<N(peer), peer_contract> peer_singleton;
+    typedef eosio::singleton<N(icpmeter), icp_meter> meter_singleton;
 
     peer_contract _peer;
     std::unique_ptr<class fork_store> store;

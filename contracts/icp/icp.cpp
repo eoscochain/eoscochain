@@ -9,8 +9,6 @@
 
 namespace eosio {
 
-
-
 icp::icp(account_name self)
     : contract(self),
       store(std::make_unique<fork_store>(self))
@@ -29,7 +27,9 @@ void icp::setpeer(account_name peer) {
 }
 
 void icp::setmaxpackes(uint32_t maxpackets) {
+    require_auth(_self);
 
+    meter_singleton(_self, _self).set(icp_meter{maxpackets, 0}, _self);
 }
 
 void icp::setmaxblocks(uint32_t maxblocks) {
@@ -185,6 +185,8 @@ void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
 
     std::pair<uint64_t, uint64_t> erased_range = std::make_pair(start_seq, start_seq < end_seq ? end_seq - 1 : end_seq);
 
+    uint32_t num = 0;
+
     for (auto it = packets.lower_bound(start_seq); it != packets.end() && it->seq < end_seq;) {
         if (static_cast<receipt_status>(it->status) == receipt_status::unknown) {
             auto receipt_action = unpack<action>(it->receipt_action);
@@ -193,6 +195,7 @@ void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
             receipt_action.send();
         }
         it = packets.erase(it); // erase it and advance to the next object
+        ++num;
     }
 
     auto it = packets.upper_bound(end_seq);
@@ -202,7 +205,10 @@ void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
     if (it == packets.end()) {
         packets.erase(eit);
         erased_range.second = end_seq;
+        ++num;
     }
+
+    meter_remove_packets(num);
 
     action(vector<permission_level>{}, _self, N(null), erased_range).send_context_free();
 }
@@ -218,7 +224,7 @@ void icp::prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq) {
 
 void icp::sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration, const bytes& receipt_action) {
     eosio_assert(_peer.peer, "empty peer icp contract");
-    require_auth(_self);
+    // require_auth(_self); // TODO: require synergetic contract's authorization
 
     eosio_assert(seq == ++_peer.last_outgoing_packet_seq, "invalid packet sequence");
     update_peer(); // update `last_outgoing_packet_seq`
@@ -230,6 +236,8 @@ void icp::sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration
         eosio_assert(e->seq - b->seq < 0, "exceed maximum packets");
     }
 
+    meter_add_packets(1);
+
     icp_packet packet{seq, expiration, send_action, receipt_action};
     packets.emplace(_self, [&](auto& p) {
         p = packet;
@@ -239,7 +247,7 @@ void icp::sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration
     action(vector<permission_level>{}, _self, N(null), packet).send_context_free();
 }
 
-void icp::genproof(uint64_t packet_seq, uint64_t receipt_seq) {
+void icp::genproof(uint64_t packet_seq, uint64_t receipt_seq) { // TODO: rate limiting, anti spam
     if (packet_seq > 0) {
         packet_table packets(_self, _self);
         auto packet = packets.get(packet_seq);
@@ -265,6 +273,24 @@ void icp::update_peer() {
     peer.set(_peer, _self);
 }
 
+void icp::meter_add_packets(uint32_t num) {
+    if (num <= 0) return;
+    meter_singleton icp_meter(_self, _self);
+    auto meter = icp_meter.get();
+    meter.current_packets += num;
+    eosio_assert(meter.current_packets <= meter.max_packets, "exceed max packets");
+    icp_meter.set(meter, _self);
 }
 
-EOSIO_ABI(eosio::icp, (init)(onblock)(onaction))
+void icp::meter_remove_packets(uint32_t num) {
+    if (num <= 0) return;
+    meter_singleton icp_meter(_self, _self);
+    auto meter = icp_meter.get();
+    meter.current_packets = meter.current_packets >= num ? meter.current_packets - num : 0;
+    icp_meter.set(meter, _self);
+}
+
+}
+
+EOSIO_ABI(eosio::icp, (setpeer)(setmaxpackes)(setmaxblocks)(openchannel)(closechannel)
+                      (addblocks)(addblock)(onpacket)(onreceipt)(oncleanup)(cleanup)(sendaction)(genproof)(prune))
