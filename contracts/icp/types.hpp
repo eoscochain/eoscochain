@@ -133,6 +133,8 @@ using block_header_state_ptr = std::shared_ptr<block_header_state>;
 
 struct block_header_with_merkle_path {
     block_header_state block_header;
+    // First id must exist in `fork_store`, and the subsequent ids are linked one by one,
+    // and the last one is exactly the previous id of `block_header`
     vector<block_id_type> merkle_path;
 
     // void validate(const digest_type& root) const;

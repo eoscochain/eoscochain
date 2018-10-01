@@ -91,10 +91,11 @@ struct pending_schedule {
 };
 typedef singleton<N(pendingsched), pending_schedule> pending_schedule_singleton;
 
-struct store_parameters {
+struct store_meter {
    uint32_t max_blocks;
+   uint32_t current_blocks;
 };
-typedef singleton<N(storeparas), store_parameters> store_parameters_singleton;
+typedef singleton<N(storemeter), store_meter> store_meter_singleton;
 
 using fork_store_ptr = std::shared_ptr<class fork_store>;
 
@@ -102,31 +103,35 @@ class fork_store {
 public:
     fork_store(account_name code);
 
-    void setmaxblocks(uint32_t max);
+    void init_seed_block(const block_header_state& block_state);
+    void reset();
+    void set_max_blocks(uint32_t max);
     void add_block_header_with_merkle_path(const block_header_state& h, const vector<block_id_type>& merkle_path);
     void add_block_header(const block_header& h);
-    bool is_producer(account_name name, const ::public_key& key);
-    producer_schedule get_producer_schedule();
-    void update_producer_schedule(const producer_schedule& schedule);
-    incremental_merkle get_block_mroot(const block_id_type& block_id);
-    checksum256_ptr get_action_mroot(const block_id_type& block_id);
-    void cutdown(uint32_t num);
+    void cutdown(uint32_t block_num);
 
 private:
+    bool is_producer(account_name name, const ::public_key& key);
+    producer_schedule get_producer_schedule();
+    incremental_merkle get_block_mroot(const block_id_type& block_id);
+    checksum256_ptr get_action_mroot(const block_id_type& block_id);
+    void validate_block_state(const block_header_state& block_state);
     void add_block_state(const block_header_state& block_state);
-    void add_block_id(const block_id_type& block_id);
+    void add_block_id(const block_id_type& block_id, const block_id_type& previous);
+    void update_active_schedule(const producer_schedule &schedule, bool clear_pending = true);
     void set_pending_schedule(uint32_t lib_num, const digest_type& hash, const producer_schedule& schedule);
     void prune(const stored_block_header_state& block_state);
     void remove(const block_id_type& id);
 
+    void meter_add_blocks(uint32_t num);
+    void meter_remove_blocks(uint32_t num = std::numeric_limits<uint32_t>::max());
+
     account_name _code;
-    stored_block_header_state _head;
-    producer_schedule_ptr _producers;
     stored_block_header_state_table _block_states;
     stored_block_header_table _blocks;
-    producer_schedule_singleton _producer_schedule;
+    producer_schedule_singleton _active_schedule;
     pending_schedule_singleton _pending_schedule;
-    store_parameters_singleton _store_parameters;
+    store_meter_singleton _store_meter;
 };
 
 }

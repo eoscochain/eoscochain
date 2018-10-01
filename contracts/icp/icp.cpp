@@ -35,11 +35,24 @@ void icp::setmaxpackes(uint32_t maxpackets) {
 void icp::setmaxblocks(uint32_t maxblocks) {
     require_auth(_self);
 
-    store->setmaxblocks(maxblocks);
+    store->set_max_blocks(maxblocks);
 }
 
-void icp::init(const bytes& data) {
+void icp::openchannel(const bytes &data) {
     require_auth(_self);
+
+    auto h = unpack<block_header_state>(data);
+    store->init_seed_block(h);
+}
+
+void icp::closechannel() {
+    require_auth(_self);
+
+    packet_table packets(_self, _self);
+    receipt_table receipts(_self, _self);
+    eosio_assert(packets.begin() == packets.end(), "remain packets");
+    eosio_assert(receipts.begin() == receipts.end(), "remain receipts");
+    store->reset();
 }
 
 void icp::addblocks(const bytes& data) {

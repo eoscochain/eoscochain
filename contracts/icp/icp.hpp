@@ -19,7 +19,10 @@ struct icp : public contract {
     void setmaxblocks(uint32_t maxblocks);
 
     // @abi action
-    void init(const bytes& data); // initialize with a block_header_state as trust seed
+    void openchannel(const bytes& data); // initialize with a block_header_state as trust seed
+    // @abi action
+    void closechannel();
+
     // @abi action
     void addblocks(const bytes& data);
     // @abi action
