@@ -28,8 +28,8 @@ namespace eosiosystem {
    using std::map;
    using std::pair;
 
-   static constexpr time refund_delay = 3*24*3600;
-   static constexpr time refund_expiration_time = 3600;
+   // static constexpr time refund_delay = 3*24*3600;
+   // static constexpr time refund_expiration_time = 3600;
 
    struct user_resources {
       account_name  owner;
@@ -341,7 +341,7 @@ namespace eosiosystem {
          if ( need_deferred_trx ) {
             eosio::transaction out;
             out.actions.emplace_back( permission_level{ from, N(active) }, _self, N(refund), from );
-            out.delay_sec = refund_delay;
+            out.delay_sec = _gstate.refund_delay;
             cancel_deferred( from ); // TODO: Remove this line when replacing deferred trxs is fixed
             out.send( from, from, true );
          } else {
@@ -411,7 +411,7 @@ namespace eosiosystem {
       refunds_table refunds_tbl( _self, owner );
       auto req = refunds_tbl.find( owner );
       eosio_assert( req != refunds_tbl.end(), "refund request not found" );
-      eosio_assert( req->request_time + refund_delay <= now(), "refund is not available yet" );
+      eosio_assert( req->request_time + _gstate.refund_delay <= now(), "refund is not available yet" );
       // Until now() becomes NOW, the fact that now() is the timestamp of the previous block could in theory
       // allow people to get their tokens earlier than the 3 day delay if the unstake happened immediately after many
       // consecutive missed blocks.

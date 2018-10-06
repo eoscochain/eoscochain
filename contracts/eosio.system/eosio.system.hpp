@@ -61,13 +61,16 @@ namespace eosiosystem {
       double              to_producers_rate          = 0.2;
       double              to_bpay_rate               = 0.25;
 
+      time                 refund_delay = 3*24*3600;
+
       // explicit serialization macro is not necessary, used here only to improve compilation time
       EOSLIB_SERIALIZE_DERIVED( eosio_global_state, eosio::blockchain_parameters,
                                 (max_ram_size)(total_ram_bytes_reserved)(total_ram_stake)
                                 (last_producer_schedule_update)(last_pervote_bucket_fill)
                                 (pervote_bucket)(perblock_bucket)(total_unpaid_blocks)(total_activated_stake)(thresh_activated_stake_time)
                                 (last_producer_schedule_size)(total_producer_vote_weight)(last_name_close)
-                                (max_producer_schedule_size)(min_pervote_daily_pay)(min_activated_stake)(continuous_rate)(to_producers_rate)(to_bpay_rate) )
+                                (max_producer_schedule_size)(min_pervote_daily_pay)(min_activated_stake)(continuous_rate)(to_producers_rate)(to_bpay_rate)
+                                (refund_delay) )
    };
 
    struct producer_info {

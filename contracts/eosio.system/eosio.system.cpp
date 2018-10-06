@@ -181,6 +181,12 @@ namespace eosiosystem {
          eosio_assert( rate >= 0 && rate <= 1, "to_bpay_rate must be in range [0, 1]" ); // TODO
 
          _gstate.to_bpay_rate = rate;
+      } else if ( name == "refund_delay" ) {
+         auto refund_delay = std::stoul(value);
+
+         eosio_assert(refund_delay >= 0 && refund_delay <= std::numeric_limits<uint32_t>::max(), "refund_delay must be uint32_t");
+
+         _gstate.refund_delay = static_cast<time>(refund_delay);
       }
    }
 
