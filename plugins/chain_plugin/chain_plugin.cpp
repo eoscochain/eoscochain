@@ -649,6 +649,8 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
             [this]( const header_confirmation& conf ) {
                my->accepted_confirmation_channel.publish( conf );
             } );
+
+      my->chain->add_indices();
    } FC_LOG_AND_RETHROW()
 
 }
@@ -915,11 +917,6 @@ bool chain_plugin::export_reversible_blocks( const fc::path& reversible_dir,
             ("num", num)("start", start)("end", end) );
 
    return (end >= start) && ((end - start + 1) == num);
-}
-
-controller::config& chain_plugin::chain_config() {
-   // will trigger optional assert if called before/after plugin_initialize()
-   return *my->chain_config;
 }
 
 controller& chain_plugin::chain() { return *my->chain; }
