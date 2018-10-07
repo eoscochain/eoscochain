@@ -19,13 +19,21 @@ void token::create( account_name issuer,
 
     stats statstable( _self, sym.name() );
     auto existing = statstable.find( sym.name() );
-    eosio_assert( existing == statstable.end(), "token with symbol already exists" );
 
-    statstable.emplace( _self, [&]( auto& s ) {
-       s.supply.symbol = maximum_supply.symbol;
-       s.max_supply    = maximum_supply;
-       s.issuer        = issuer;
-    });
+    if (existing == statstable.end()) {
+       statstable.emplace( _self, [&]( auto& s ) {
+          s.supply.symbol = maximum_supply.symbol;
+          s.max_supply    = maximum_supply;
+          s.issuer        = issuer;
+       });
+    } else { // modify max-supply
+       eosio_assert( existing->issuer == issuer, "issuer mismatch" );
+       eosio_assert( maximum_supply >= existing->supply, "max-supply must be >= supply" );
+
+       statstable.modify( existing, 0, [&]( auto& s ) {
+          s.max_supply = maximum_supply;
+       });
+    }
 }
 
 
