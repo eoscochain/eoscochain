@@ -16,6 +16,7 @@ class kafka {
 public:
     void set_config(Configuration config);
     void set_topics(const string& block_topic, const string& tx_topic, const string& tx_trace_topic, const string& action_topic);
+    void set_partition(int partition);
     void start();
     void stop();
 
@@ -35,6 +36,8 @@ private:
     string tx_topic_;
     string tx_trace_topic_;
     string action_topic_;
+
+    int partition_{-1};
 
     std::unique_ptr<Producer> producer_;
 };

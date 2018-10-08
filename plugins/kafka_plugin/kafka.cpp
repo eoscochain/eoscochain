@@ -51,6 +51,10 @@ void kafka::set_topics(const string& block_topic, const string& tx_topic, const 
     action_topic_ = action_topic;
 }
 
+void kafka::set_partition(int partition) {
+    partition_ =  partition;
+}
+
 void kafka::start() {
     producer_ = std::make_unique<Producer>(config_);
 
@@ -155,25 +159,25 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
 void kafka::consume_block(BlockPtr block) {
     auto payload = fc::json::to_string(*block, fc::json::legacy_generator);
     Buffer buffer (block->id.data(), block->id.size());
-    producer_->produce(MessageBuilder(block_topic_).key(buffer).payload(payload));
+    producer_->produce(MessageBuilder(block_topic_).partition(partition_).key(buffer).payload(payload));
 }
 
 void kafka::consume_transaction(TransactionPtr tx) {
     auto payload = fc::json::to_string(*tx, fc::json::legacy_generator);
     Buffer buffer (tx->id.data(), tx->id.size());
-    producer_->produce(MessageBuilder(tx_topic_).key(buffer).payload(payload));
+    producer_->produce(MessageBuilder(tx_topic_).partition(partition_).key(buffer).payload(payload));
 }
 
 void kafka::consume_transaction_trace(TransactionTracePtr tx_trace) {
     auto payload = fc::json::to_string(*tx_trace, fc::json::legacy_generator);
     Buffer buffer (tx_trace->id.data(), tx_trace->id.size());
-    producer_->produce(MessageBuilder(tx_trace_topic_).key(buffer).payload(payload));
+    producer_->produce(MessageBuilder(tx_trace_topic_).partition(partition_).key(buffer).payload(payload));
 }
 
 void kafka::consume_action(ActionPtr action) {
     auto payload = fc::json::to_string(*action, fc::json::legacy_generator);
     Buffer buffer((char*)&action->global_seq, sizeof(action->global_seq));
-    producer_->produce(MessageBuilder(action_topic_).key(buffer).payload(payload));
+    producer_->produce(MessageBuilder(action_topic_).partition(partition_).key(buffer).payload(payload));
 }
 
 }
