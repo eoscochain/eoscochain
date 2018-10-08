@@ -115,6 +115,7 @@ void kafka::push_transaction_trace(const chain::transaction_trace_ptr& tx_trace)
     auto t = std::make_shared<TransactionTrace>();
 
     t->id = checksum_bytes(tx_trace->id);
+    t->block_num = tx_trace->block_num;
     t->scheduled = tx_trace->scheduled;
     if (tx_trace->receipt) {
         t->status = transactionStatus(tx_trace->receipt->status);
@@ -146,6 +147,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     if (not action_trace.receipt.auth_sequence.empty()) a->auth_seq = fc::raw::pack(action_trace.receipt.auth_sequence);
     a->code_seq = action_trace.receipt.code_sequence;
     a->abi_seq = action_trace.receipt.abi_sequence;
+    a->block_num = action_trace.block_num;
     a->tx_id = checksum_bytes(action_trace.trx_id);
     if (not action_trace.console.empty()) a->console = action_trace.console;
 

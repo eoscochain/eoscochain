@@ -44,6 +44,8 @@ enum TransactionStatus {
 struct TransactionTrace { // new ones will override old ones, typically when status is changed
     bytes id;
 
+    uint32_t block_num;
+
     bool scheduled;
 
     TransactionStatus status;
@@ -70,7 +72,9 @@ struct Action {
     unsigned code_seq;
     unsigned abi_seq;
 
+    uint32_t block_num;
     bytes tx_id; // the transaction that generated this action
+
     string console;
 };
 
