@@ -12,8 +12,9 @@ using eosio::indexed_by;
 using eosio::singleton;
 
 key256 to_key256(const checksum256& c) {
-    std::array<uint8_t, 32> a;
-    std::copy(std::begin(c.hash), std::end(c.hash), a.begin());
+    std::array<uint128_t, 2> a;
+    std::copy(c.hash, c.hash+16, reinterpret_cast<uint8_t*>(&a[0]));
+    std::copy(c.hash+16, c.hash+32, reinterpret_cast<uint8_t*>(&a[1]));
     return key256(a);
 }
 
