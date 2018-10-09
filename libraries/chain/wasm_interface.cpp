@@ -1715,6 +1715,7 @@ public:
 
          auto check = fc::crypto::public_key(*signature, digest, false);
          EOS_ASSERT( check == block_state->block_signing_key, transaction_exception, "wrong expected key different than recovered key" );
+         break;
       }
 
       bool sign = false;
