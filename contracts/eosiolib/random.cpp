@@ -5,6 +5,8 @@
 #include "transaction.h"
 #include "types.h"
 
+#include "random.h"
+
 /*
 #define ULONG_MAX  ((unsigned long)(~0L))     // 0xFFFFFFFF for 32-bits
 #define LONG_MAX   ((long)(ULONG_MAX >> 1))   // 0x7FFFFFFF for 32-bits
@@ -96,14 +98,14 @@ namespace eosio {
       get_transaction_id(&tx_id);
       uint32_t* tx_id_parts = reinterpret_cast<uint32_t*>(tx_id.hash);
 
-      return std::make_unique<std::seed_seq>({current_halves[0], current_halves[1],
+      return std::make_unique<std::seed_seq>(std::initializer_list<uint32_t>{current_halves[0], current_halves[1],
                            tx_id_parts[0], tx_id_parts[1], tx_id_parts[2], tx_id_parts[3],
                            tx_id_parts[4], tx_id_parts[5], tx_id_parts[6], tx_id_parts[7]});
    }
 
    std::unique_ptr<std::seed_seq> seed_timestamp_txid_signed() {
       char buf[sizeof(signature)];
-      size_t size = producer_random_seed(buf, sizeof(buf))
+      size_t size = producer_random_seed(buf, sizeof(buf));
       eosio_assert( size > 0 && size <= sizeof(buf), "buffer is too small" );
       uint32_t* seq = reinterpret_cast<uint32_t*>(buf);
       return std::make_unique<std::seed_seq>(seq, seq + 16); // use the leading 64 bytes, discard the last 2 bytes
