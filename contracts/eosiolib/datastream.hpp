@@ -825,6 +825,18 @@ DataStream& operator>>( DataStream& ds, std::tuple<Args...>& t ) {
    return ds;
 }
 
+template<typename DataStream, typename First, typename Second>
+DataStream& operator<<( DataStream& ds, const std::pair<First, Second>& t ) {
+   ds << t.first << t.second;
+   return ds;
+}
+
+template<typename DataStream, typename First, typename Second>
+DataStream& operator>>( DataStream& ds, std::pair<First, Second>& t ) {
+   ds >> t.first >> t.second;
+   return ds;
+}
+
 /**
  *  Serialize a class
  *
@@ -954,25 +966,6 @@ bytes pack( const T& value ) {
   datastream<char*> ds( result.data(), result.size() );
   ds << value;
   return result;
-}
-
-template<typename K, typename V>
-size_t pack_size( const std::pair<K, V>& value ) {
-    datastream<size_t> ps;
-    ps << value.first;
-    ps << value.second;
-    return ps.tellp();
-}
-
-template<typename K, typename V>
-bytes pack( const std::pair<K, V>& value ) {
-    bytes result;
-    result.resize(pack_size(value));
-
-    datastream<char*> ds( result.data(), result.size() );
-    ds << value.first;
-    ds << value.second;
-    return result;
 }
 
 /**

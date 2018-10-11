@@ -23,7 +23,7 @@ void fork_store::validate_block_state(const block_header_state& h) {
     h.validate();
 
     auto by_blockid = _block_states.get_index<N(blockid)>();
-    eosio_assert(by_blockid.find(h.id) == by_blockid.end(), "already existing block");
+    eosio_assert(by_blockid.find(to_key256(h.id)) == by_blockid.end(), "already existing block");
     eosio_assert(is_producer(h.header.producer, h.block_signing_key), "invalid producer");
     auto previous_block_num = block_header::num_from_id(h.header.previous);
     eosio_assert(previous_block_num + 1 == h.block_num, "unlinkable block");
@@ -106,7 +106,7 @@ void fork_store::add_block_header_with_merkle_path(const block_header_state& h, 
 
 void fork_store::add_block_state(const block_header_state& block_state) {
     auto by_blockid = _block_states.get_index<N(blockid)>();
-    eosio_assert(by_blockid.find(block_state.id) == by_blockid.end(), "already existing block");
+    eosio_assert(by_blockid.find(to_key256(block_state.id)) == by_blockid.end(), "already existing block");
 
     meter_add_blocks(1);
 
@@ -118,7 +118,7 @@ void fork_store::add_block_state(const block_header_state& block_state) {
        b.dpos_irreversible_blocknum = block_state.dpos_irreversible_blocknum;
        b.bft_irreversible_blocknum = block_state.bft_irreversible_blocknum;
        b.blockroot_merkle = block_state.blockroot_merkle;
-    })
+    });
 
     _blocks.emplace(_code, [&](auto& b) {
         b.pk = _blocks.available_primary_key();
@@ -187,7 +187,7 @@ void fork_store::cutdown(uint32_t block_num) {
 
 // Remove specified block and all its successive blocks
 void fork_store::remove(const block_id_type& id) {
-    vector<block_id_type> remove_queue{id};
+    vector<key256> remove_queue{to_key256(id)};
     uint32_t num = 0;
 
     for( uint32_t i = 0; i < remove_queue.size(); ++i ) {
@@ -209,16 +209,16 @@ void fork_store::remove(const block_id_type& id) {
         }
 
         {
-            auto by_prev = _block_states.get_index<N(by_prev)>();
-            for (auto it = by_prev.lower_bound(remove_queue[i]); it != by_prev.end() && it->previous == remove_queue[i]; ++it) {
-                remove_queue.push_back(it->id);
+            auto by_prev = _block_states.get_index<N(prev)>();
+            for (auto it = by_prev.lower_bound(remove_queue[i]); it != by_prev.end() && to_key256(it->previous) == remove_queue[i]; ++it) {
+                remove_queue.push_back(to_key256(it->id));
             }
         }
 
         {
-            auto by_prev = _blocks.get_index<N(by_prev)>();
-            for (auto it = by_prev.lower_bound(remove_queue[i]); it != by_prev.end() && it->previous == remove_queue[i]; ++it) {
-                remove_queue.push_back(it->id);
+            auto by_prev = _blocks.get_index<N(prev)>();
+            for (auto it = by_prev.lower_bound(remove_queue[i]); it != by_prev.end() && to_key256(it->previous) == remove_queue[i]; ++it) {
+                remove_queue.push_back(to_key256(it->id));
             }
         }
     }
@@ -228,16 +228,17 @@ void fork_store::remove(const block_id_type& id) {
 
 void fork_store::add_block_header(const block_header& h) {
     auto by_blockid = _blocks.get_index<N(blockid)>();
-    auto b = by_blockid.get(h.id());
-    eosio_assert(!b.has_action_mroot(), "already complete block");
+    auto b = by_blockid.find(to_key256(h.id()));
+    eosio_assert(b != by_blockid.end(), "missing block");
+    eosio_assert(!b->has_action_mroot(), "already complete block");
     by_blockid.modify(b, 0, [&](auto& o) {
         o.action_mroot = h.action_mroot; // TODO: assignment
-    })
+    });
 }
 
 void fork_store::add_block_id(const block_id_type& block_id, const block_id_type& previous) {
     auto by_blockid = _blocks.get_index<N(blockid)>();
-    eosio_assert(by_blockid.find(block_id) == by_blockid.end(), "already existing block");
+    eosio_assert(by_blockid.find(to_key256(block_id)) == by_blockid.end(), "already existing block");
 
     _blocks.emplace(_code, [&](auto& o) {
         o.pk = _blocks.available_primary_key();
@@ -279,13 +280,13 @@ void fork_store::set_pending_schedule(uint32_t lib_num, const digest_type& hash,
 
 incremental_merkle fork_store::get_block_mroot(const block_id_type& block_id) {
     auto by_blockid = _block_states.get_index<N(blockid)>();
-    auto b = by_blockid.get(block_id);
+    auto b = by_blockid.get(to_key256(block_id));
     return b.blockroot_merkle;
 }
 
-checksum256_ptr fork_store::get_action_mroot(const block_id_type& block_id) {
+checksum256 fork_store::get_action_mroot(const block_id_type& block_id) {
     auto by_blockid = _blocks.get_index<N(blockid)>();
-    auto b = by_blockid.get(block_id);
+    auto b = by_blockid.get(to_key256(block_id));
 
     auto head = *_block_states.get_index<N(libblocknum)>().begin();
     eosio_assert(b.block_num <= head.last_irreversible_blocknum(), "block number not irreversible");

@@ -7,6 +7,10 @@
 #include "hash.hpp"
 #include "fork.hpp"
 
+#include "merkle.cpp"
+#include "types.cpp"
+#include "fork.cpp"
+
 namespace eosio {
 
 icp::icp(account_name self)
@@ -14,7 +18,7 @@ icp::icp(account_name self)
       store(std::make_unique<fork_store>(self))
 {
     peer_singleton peer(_self, _self);
-    _peer = peer.get_or_default(peer_contract{})
+    _peer = peer.get_or_default(peer_contract{});
 }
 
 void icp::setpeer(account_name peer) {
@@ -68,10 +72,9 @@ bytes icp::extract_action(const icp_action& ia) {
     eosio_assert(_peer.peer, "empty peer icp contract");
 
     auto action_mroot = store->get_action_mroot(ia.block_id);
-    eosio_assert(action_mroot != nullptr, "invalid block id");
 
     auto mroot = merkle(ia.merkle_path); // TODO: merkle path computation optimization
-    eosio_assert(mroot == *action_mroot, "invalid actions merkle root");
+    eosio_assert(mroot == action_mroot, "invalid actions merkle root");
 
     auto receipt = unpack<action_receipt>(ia.action_receipt);
     auto receipt_digest = receipt.digest();
@@ -107,7 +110,7 @@ void icp::onpacket(const icp_action& ia) {
     update_peer(); // update `last_outgoing_receipt_seq`
 
     if (packet.expiration <= now()) {
-        print("icp action has expired: ", packet.expiration, " <= ", now);
+        print_f("icp action has expired: % <= now %", uint64_t(packet.expiration), uint64_t(now));
 
         icp_receipt receipt{_peer.last_outgoing_receipt_seq, packet.seq, static_cast<uint8_t>(receipt_status::expired), {}};
         action(vector<permission_level>{}, _self, N(null), receipt).send_context_free();
@@ -142,7 +145,7 @@ void icp::onreceipt(const icp_action& ia) {
 
     receipts.emplace(_self, [&](auto& r) {
         r = receipt;
-    })
+    });
 
     packet_table packets(_self, _self);
     auto packet = packets.get(receipt.pseq);
@@ -150,7 +153,7 @@ void icp::onreceipt(const icp_action& ia) {
 
     auto status = static_cast<receipt_status>(receipt.status);
     eosio_assert(status == receipt_status::executed || status == receipt_status::expired, "invalid receipt status");
-    packet.status = status;
+    packet.status = receipt.status;
 
     auto receipt_action = unpack<action>(packet.receipt_action);
     receipt_action.authorization.emplace_back(_self, N(active));

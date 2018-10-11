@@ -22,7 +22,7 @@ using stored_block_header_ptr = std::shared_ptr<struct stored_block_header>;
 using stored_block_header_state_ptr = std::shared_ptr<struct stored_block_header_state>;
 
 /* Irreversible block header */
-struct stored_block_header {
+struct [[eosio::table]] stored_block_header {
     uint64_t pk;
 
     block_id_type id;
@@ -32,25 +32,25 @@ struct stored_block_header {
 
     checksum256 action_mroot = checksum256{};
 
-    bool has_action_mroot() {
+    bool has_action_mroot() const {
         uint8_t zero[32] = {};
-        return !std::equal(std::cbegin(action_mroot.hash), std::cend(action_mroot.hash), std::cbegin(zero.hash), std::cend(zero.hash));
+        return !std::equal(std::cbegin(action_mroot.hash), std::cend(action_mroot.hash), std::cbegin(zero), std::cend(zero));
     }
 
     auto primary_key() const { return pk; }
     key256 by_blockid() const { return to_key256(id); }
     key256 by_prev() const { return to_key256(previous); }
-    uint32_t by_blocknum() const { return block_num; }
+    uint64_t by_blocknum() const { return uint64_t(block_num); }
 };
 
 typedef multi_index<N(block), stored_block_header,
         indexed_by<N(blockid), const_mem_fun<stored_block_header, key256, &stored_block_header::by_blockid>>,
         indexed_by<N(prev), const_mem_fun<stored_block_header, key256, &stored_block_header::by_prev>>,
-        indexed_by<N(blocknum), const_mem_fun<stored_block_header, uint32_t, &stored_block_header::by_blocknum>>
+        indexed_by<N(blocknum), const_mem_fun<stored_block_header, uint64_t, &stored_block_header::by_blocknum>>
 > stored_block_header_table;
 
 /* Block header state */
-struct stored_block_header_state {
+struct [[eosio::table]] stored_block_header_state {
     uint64_t pk;
 
     block_id_type id;
@@ -70,7 +70,7 @@ struct stored_block_header_state {
     auto primary_key() const { return pk; }
     key256 by_blockid() const { return to_key256(id); }
     key256 by_prev() const { return to_key256(previous); }
-    uint32_t by_blocknum() const { return block_num; }
+    uint64_t by_blocknum() const { return uint64_t(block_num); }
     uint128_t by_lib_block_num() const {
        return std::numeric_limits<uint128_t>::max() - ((uint128_t(dpos_irreversible_blocknum) << 64) + (uint128_t(bft_irreversible_blocknum) << 32) + block_num);
     }
@@ -79,20 +79,20 @@ struct stored_block_header_state {
 typedef multi_index<N(blockstate), stored_block_header_state,
         indexed_by<N(blockid), const_mem_fun<stored_block_header_state, key256, &stored_block_header_state::by_blockid>>,
         indexed_by<N(prev), const_mem_fun<stored_block_header_state, key256, &stored_block_header_state::by_prev>>,
-        indexed_by<N(blocknum), const_mem_fun<stored_block_header_state, uint32_t, &stored_block_header_state::by_blocknum>>,
+        indexed_by<N(blocknum), const_mem_fun<stored_block_header_state, uint64_t, &stored_block_header_state::by_blocknum>>,
         indexed_by<N(libblocknum), const_mem_fun<stored_block_header_state, uint128_t, &stored_block_header_state::by_lib_block_num>>
 > stored_block_header_state_table;
 
 typedef singleton<N(activesched), producer_schedule> producer_schedule_singleton;
 
-struct pending_schedule {
+struct [[eosio::table]] pending_schedule {
    uint32_t pending_schedule_lib_num;
    digest_type pending_schedule_hash;
    producer_schedule pending_schedule;
 };
 typedef singleton<N(pendingsched), pending_schedule> pending_schedule_singleton;
 
-struct store_meter {
+struct [[eosio::table]] store_meter {
    uint32_t max_blocks;
    uint32_t current_blocks;
 };
@@ -110,12 +110,12 @@ public:
     void add_block_header_with_merkle_path(const block_header_state& h, const vector<block_id_type>& merkle_path);
     void add_block_header(const block_header& h);
     void cutdown(uint32_t block_num);
+    checksum256 get_action_mroot(const block_id_type& block_id);
 
 private:
     bool is_producer(account_name name, const ::public_key& key);
     producer_schedule get_producer_schedule();
     incremental_merkle get_block_mroot(const block_id_type& block_id);
-    checksum256_ptr get_action_mroot(const block_id_type& block_id);
     void validate_block_state(const block_header_state& block_state);
     void add_block_state(const block_header_state& block_state);
     void add_block_id(const block_id_type& block_id, const block_id_type& previous);

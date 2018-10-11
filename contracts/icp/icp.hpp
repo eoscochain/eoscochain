@@ -4,6 +4,8 @@
  */
 #pragma once
 
+#include <eosiolib/singleton.hpp>
+
 #include "types.hpp"
 
 namespace eosio {
@@ -11,35 +13,35 @@ namespace eosio {
 struct icp : public contract {
     explicit icp(account_name self);
 
-    // @abi action
+    [[eosio::action]]
     void setpeer(account_name peer);
-    // @abi action
+    [[eosio::action]]
     void setmaxpackes(uint32_t maxpackets); // limit the maximum stored packets, to support icp rate limiting
-    // @abi action
+    [[eosio::action]]
     void setmaxblocks(uint32_t maxblocks);
 
-    // @abi action
+   [[eosio::action]]
     void openchannel(const bytes& data); // initialize with a block_header_state as trust seed
-    // @abi action
+    [[eosio::action]]
     void closechannel();
 
-    // @abi action
+    [[eosio::action]]
     void addblocks(const bytes& data);
-    // @abi action
+    [[eosio::action]]
     void addblock(const bytes& data);
-    // @abi action
+    [[eosio::action]]
     void onpacket(const icp_action& ia);
-    // @abi action
+    [[eosio::action]]
     void onreceipt(const icp_action& ia);
-    // @abi action
+    [[eosio::action]]
     void oncleanup(const icp_action& ia);
-    // @abi action
+    [[eosio::action]]
     void cleanup(uint64_t start_seq, uint64_t end_seq);
-    // @abi action
+    [[eosio::action]]
     void sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration, const bytes& receipt_action);
-    // @abi action
+    [[eosio::action]]
     void genproof(uint64_t packet_seq, uint64_t receipt_seq); // regenerate a proof of old packet/receipt
-    // @abi action
+    [[eosio::action]]
     void prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq); // prune oldest receipts that will not be used any more
 
     uint64_t next_packet_seq() const;
@@ -51,7 +53,7 @@ private:
     void meter_add_packets(uint32_t num);
     void meter_remove_packets(uint32_t num = std::numeric_limits<uint32_t>::max());
 
-    struct peer_contract {
+    struct [[eosio::table]] peer_contract {
         account_name peer = 0;
         uint64_t last_outgoing_packet_seq = 0;
         uint64_t last_incoming_packet_seq = 0; // to validate
@@ -59,7 +61,7 @@ private:
         uint64_t last_incoming_receipt_seq = 0; // to validate
     };
 
-    struct icp_meter {
+    struct [[eosio::table]] icp_meter {
         uint32_t max_packets;
         uint32_t current_packets;
     };

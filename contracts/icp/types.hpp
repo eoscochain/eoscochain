@@ -34,9 +34,9 @@ bool operator!=(const producer_key& lhs, const producer_key& rhs) {
     return std::tie(lhs.producer_name, lhs.block_signing_key) != std::tie(rhs.producer_name, rhs.block_signing_key);
 }
 
-bool operator==(const checksum256& lhs, const checksum256& rhs) {
+/* bool operator==(const checksum256& lhs, const checksum256& rhs) {
     return std::equal(std::cbegin(lhs.hash), std::cend(lhs.hash), std::cbegin(rhs.hash), std::cend(rhs.hash));
-}
+} */
 
 bool operator!=(const checksum256& lhs, const checksum256& rhs) {
     return !std::equal(std::cbegin(lhs.hash), std::cend(lhs.hash), std::cbegin(rhs.hash), std::cend(rhs.hash));
@@ -158,47 +158,6 @@ struct action_receipt {
    EOSLIB_SERIALIZE(action_receipt, (receiver)(act_digest)(global_sequence)(recv_sequence)(auth_sequence)(code_sequence)(abi_sequence))
 };
 
-/* Accelerate compilation of `unpack`, other than only depends on boost::pfr.
- */
-
-template<>
-block_header unpack<block_header>( const char* buffer, size_t len ) {
-    block_header bh;
-    datastream<const char*> ds(buffer,len);
-    ds >> bh.timestamp >> bh.producer >> bh.confirmed >> bh.previous >> bh.transaction_mroot >> bh.action_mroot >> bh.schedule_version >> bh.new_producers >> bh.header_extensions;
-    return std::move(bh);
-}
-
-template<>
-block_header_state unpack<block_header_state>( const char* buffer, size_t len ) {
-    block_header_state h;
-    block_header& bh = h.header;
-
-    datastream<const char*> ds(buffer,len);
-
-    ds >> h.id >> h.block_num;
-
-    ds >> bh.timestamp >> bh.producer >> bh.confirmed >> bh.previous >> bh.transaction_mroot >> bh.action_mroot >> bh.schedule_version >> bh.new_producers >> bh.header_extensions;
-
-    ds >> h.blockroot_merkle >> h.pending_schedule_hash >> h.block_signing_key >> h.producer_signature >> h.dpos_proposed_irreversible_blocknum >> h.dpos_irreversible_blocknum >> h.bft_irreversible_blocknum >> h.pending_schedule_lib_num >> h.pending_schedule >> h.active_schedule >> h.producer_to_last_produced >> h.producer_to_last_implied_irb >> h.confirm_count >> h.confirmations;
-
-    return std::move(h);
-}
-
-template<>
-block_header_with_merkle_path unpack<block_header_with_merkle_path>(const char* buffer, size_t len) {
-    block_header_with_merkle_path m;
-    block_header_state& h = m.block_header;
-
-    datastream<const char*> ds(buffer,len);
-
-    ds >> h.id >> h.block_num >> h.header >> h.blockroot_merkle >> h.pending_schedule_hash >> h.block_signing_key >> h.producer_signature >> h.dpos_proposed_irreversible_blocknum >> h.dpos_irreversible_blocknum >> h.bft_irreversible_blocknum >> h.pending_schedule_lib_num >> h.pending_schedule >> h.active_schedule >> h.producer_to_last_produced >> h.producer_to_last_implied_irb >> h.confirm_count >> h.confirmations;
-
-    ds >> m.merkle_path;
-
-    return std::move(m);
-}
-
 // @abi table icp_action i64
 struct icp_action {
    bytes action;
@@ -210,7 +169,7 @@ struct icp_action {
    EOSLIB_SERIALIZE(icp_action, (action)(action_receipt)(block_id)(merkle_path))
 };
 
-struct icp_packet {
+struct [[eosio::table]] icp_packet {
     uint64_t seq; // strictly increasing sequence
     // account_name from; // the icp sender on the source chain
     // account_name to; // the icp receiver on the destination chain
@@ -231,7 +190,7 @@ enum class receipt_status : uint8_t {
     // failed = 3
 };
 
-struct icp_receipt {
+struct [[eosio::table]] icp_receipt {
     uint64_t seq; // strictly increasing sequence
     uint64_t pseq; // sequence of the corresponding icp_packet
     // account_name from; // corresponding to the icp receiver of the icp_packet on the destination chain
@@ -251,7 +210,7 @@ struct icp_cleanup {
 
 typedef eosio::multi_index<N(packets), icp_packet> packet_table;
 typedef eosio::multi_index<N(receipts), icp_receipt,
-                           indexed_by<N(pseq), const_mem_fun<icp_receipt, uint64_t, &icp_receipt::by_pseq>
+                           indexed_by<N(pseq), const_mem_fun<icp_receipt, uint64_t, &icp_receipt::by_pseq>>
                            > receipt_table;
 
 }
