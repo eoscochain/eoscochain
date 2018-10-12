@@ -973,10 +973,11 @@ struct controller_impl {
    void apply_block( const signed_block_ptr& b, controller::block_status s ) { try {
       try {
          // EOS_ASSERT( b->block_extensions.size() == 0, block_validate_exception, "no supported extensions" );
-         pending->_pending_block_state->block->block_extensions = b->block_extensions;
 
          auto producer_block_id = b->id();
          start_block( b->timestamp, b->confirmed, s , producer_block_id);
+         
+         pending->_pending_block_state->block->block_extensions = b->block_extensions;
 
          transaction_trace_ptr trace;
 
