@@ -91,16 +91,11 @@ namespace eosio {
    */
 
    std::unique_ptr<std::seed_seq> seed_timestamp_txid() {
-      uint64_t current = current_time();
-      uint32_t* current_halves = reinterpret_cast<uint32_t*>(&current);
-
-      transaction_id_type tx_id;
-      get_transaction_id(&tx_id);
-      uint32_t* tx_id_parts = reinterpret_cast<uint32_t*>(tx_id.hash);
-
-      return std::make_unique<std::seed_seq>(std::initializer_list<uint32_t>{current_halves[0], current_halves[1],
-                           tx_id_parts[0], tx_id_parts[1], tx_id_parts[2], tx_id_parts[3],
-                           tx_id_parts[4], tx_id_parts[5], tx_id_parts[6], tx_id_parts[7]});
+      char buf[40]; // 10 * sizeof(uint32_t)
+      size_t size = timestamp_txid_seed(buf, sizeof(buf));
+      eosio_assert( size > 0 && size <= sizeof(buf), "buffer is too small" );
+      uint32_t* seq = reinterpret_cast<uint32_t*>(buf);
+      return std::make_unique<std::seed_seq>(seq, seq + 10);
    }
 
    std::unique_ptr<std::seed_seq> seed_timestamp_txid_signed() {

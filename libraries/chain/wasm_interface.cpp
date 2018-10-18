@@ -1683,11 +1683,24 @@ public:
     }
 };
 
-class producer_random_seed_api : public context_aware_api {
+class random_seed_api : public context_aware_api {
 public:
-   producer_random_seed_api(apply_context& ctx)
+   random_seed_api(apply_context& ctx)
    : context_aware_api(ctx) {}
 
+   int timestamp_txid_seed(array_ptr<char> sig, size_t siglen) {
+      auto data = timestamp_txid();
+      auto sig_size = fc::raw::pack_size(data);
+      if (siglen == 0) return sig_size;
+
+      if (sig_size <= siglen) {
+         datastream<char *> ds(sig, sig_size);
+         fc::raw::pack(ds, data);
+         return sig_size;
+      }
+      return 0;
+   }
+   
    int producer_random_seed(array_ptr<char> sig, size_t siglen) {
       auto data = timestamp_txid();
       fc::sha256::encoder encoder;
@@ -1755,7 +1768,11 @@ public:
 
 private:
    vector<uint32_t> timestamp_txid() {
-      auto current = static_cast<uint64_t>( context.control.pending_block_time().time_since_epoch().count() );
+      auto current = context.control.pending_block_time().time_since_epoch().count();
+
+      // Floor to a producer round time. TODO: reasonable?
+      current -= current % (config::block_interval_us * config::producer_repetitions);
+
       uint32_t* current_halves = reinterpret_cast<uint32_t*>(&current);
 
       uint32_t* tx_id_parts = reinterpret_cast<uint32_t*>(context.trx_context.id.data());
@@ -1766,7 +1783,8 @@ private:
    }
 };
 
-REGISTER_INTRINSICS(producer_random_seed_api,
+REGISTER_INTRINSICS(random_seed_api,
+   (timestamp_txid_seed,   int(int, int)               )
    (producer_random_seed,  int(int, int)               )
 );
 
