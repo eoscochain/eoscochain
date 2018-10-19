@@ -1734,11 +1734,15 @@ public:
       bool sign = false;
 
       if (context.control.is_producing_block()) {
-         // Producer is producing this block
          auto signer = context.control.pending_producer_signer();
          if (signer) {
+            // Producer is producing this block
             signature = signer(digest);
             sign = true;
+         } else {
+            // Non-producer is speculating this block, so skips the signing
+            // TODO: speculating result will be different from producing result
+            signature.emplace();
          }
       }
 
@@ -1770,8 +1774,7 @@ private:
    vector<uint32_t> timestamp_txid() {
       auto current = context.control.pending_block_time().time_since_epoch().count();
 
-      // Floor to a producer round time. TODO: reasonable?
-      current -= current % (config::block_interval_us * config::producer_repetitions);
+      // current -= current % (config::block_interval_us * config::producer_repetitions);
 
       uint32_t* current_halves = reinterpret_cast<uint32_t*>(&current);
 
