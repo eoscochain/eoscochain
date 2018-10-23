@@ -212,8 +212,9 @@ struct faucet_testnet_plugin_impl {
          return std::make_pair(too_many_requests, fc::variant(response));
       }
 
+      chain::chain_id_type chainid;
       auto& plugin = _app.get_plugin<chain_plugin>();
-      auto chainid = plugin.get_chain_id();
+      plugin.get_chain_id(chainid);
       controller& cc = plugin.chain();
 
       signed_transaction trx;
@@ -232,7 +233,7 @@ struct faucet_testnet_plugin_impl {
       trx.sign(_create_account_private_key, chainid);
 
       try {
-         cc.push_transaction( std::make_shared<transaction_metadata>(trx), fc::time_point::now() + fc::milliseconds(30) );
+         cc.push_transaction( std::make_shared<transaction_metadata>(trx) );
       } catch (const account_name_exists_exception& ) {
          // another transaction ended up adding the account, so look for alternates
          return find_alternates(new_account_name);
