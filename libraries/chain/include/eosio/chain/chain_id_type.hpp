@@ -22,6 +22,8 @@ namespace chain {
    struct chain_id_type : public fc::sha256 {
       using fc::sha256::sha256;
 
+      chain_id_type() = default;
+
       template<typename T>
       inline friend T& operator<<( T& ds, const chain_id_type& cid ) {
         ds.write( cid.data(), cid.data_size() );
@@ -37,8 +39,6 @@ namespace chain {
       void reflector_verify()const;
 
       private:
-         chain_id_type() = default;
-
          // Some exceptions are unfortunately necessary:
          template<typename T>
          friend T fc::variant::as()const;

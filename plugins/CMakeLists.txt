@@ -18,10 +18,11 @@ add_subdirectory(db_size_api_plugin)
 #add_subdirectory(mongo_db_plugin)
 add_subdirectory(mysql_db_plugin)
 add_subdirectory(kafka_plugin)
-#add_subdirectory(cochain_relay_plugin)
 add_subdirectory(login_plugin)
 add_subdirectory(test_control_plugin)
 add_subdirectory(test_control_api_plugin)
+
+add_subdirectory(icp_relay_plugin)
 
 # Forward variables to top level so packaging picks them up
 set(CPACK_DEBIAN_PACKAGE_DEPENDS ${CPACK_DEBIAN_PACKAGE_DEPENDS} PARENT_SCOPE)
