@@ -18,8 +18,10 @@ session::session(tcp::socket socket, relay_ptr relay)
    set_socket_options();
    ws_->binary(true);
    wlog("open session ${id}", ("id", session_id_));
+}
 
-   ws_->async_accept(boost::asio::bind_executor(strand_, [this](boost::system::error_code ec) {
+void session::do_accept() {
+   ws_->async_accept(boost::asio::bind_executor(strand_, [this, self=shared_from_this()](boost::system::error_code ec) {
       if (ec) {
          return on_error(ec, "accept");
       }
@@ -45,22 +47,21 @@ session::session(const string& peer, boost::asio::io_context& ioc, relay_ptr rel
    auto c = peer.find(':');
    remote_host_ = peer.substr(0, c);
    remote_port_ = peer.substr(c+1, peer.size());
+}
 
-   // resolve
+void session::do_connect() {
    resolver_.async_resolve(remote_host_, remote_port_,
-      boost::asio::bind_executor(strand_, [this](boost::system::error_code ec, tcp::resolver::results_type results) {
+      boost::asio::bind_executor(strand_, [this, self=shared_from_this()](boost::system::error_code ec, tcp::resolver::results_type results) {
          if (ec) {
             return on_error(ec, "resolve");
          }
 
          // connect
          boost::asio::async_connect(ws_->next_layer(),
-                                    results.begin(), results.end(),
-                                    boost::asio::bind_executor(strand_,
-                                       std::bind(&session::on_connect,
-                                                 shared_from_this(),
-                                                 std::placeholders::_1)
-                                    )
+            results.begin(), results.end(),
+            boost::asio::bind_executor(strand_,
+               std::bind(&session::on_connect, self, std::placeholders::_1)
+            )
          );
       })
    );
@@ -68,21 +69,21 @@ session::session(const string& peer, boost::asio::io_context& ioc, relay_ptr rel
 
 void session::on_connect(boost::system::error_code ec) {
    if (ec) {
-      return on_error(ec, "resolve");
+      return on_error(ec, "connect");
    }
 
    set_socket_options();
 
    // handshake
    ws_->async_handshake(remote_host_, "/",
-                        boost::asio::bind_executor(strand_, [this](boost::system::error_code ec) {
-                           if (ec) {
-                              return on_error(ec, "handshake");
-                           }
+      boost::asio::bind_executor(strand_, [this, self=shared_from_this()](boost::system::error_code ec) {
+         if (ec) {
+            return on_error(ec, "handshake");
+         }
 
-                           do_hello();
-                           do_read();
-                        })
+         do_hello();
+         do_read();
+      })
    );
 }
 
@@ -148,7 +149,7 @@ void session::do_hello() {
 
 void session::do_read() {
    ws_->async_read(in_buffer_,
-       boost::asio::bind_executor(strand_, [this](boost::system::error_code ec, std::size_t bytes_transferred) {
+       boost::asio::bind_executor(strand_, [this, self=shared_from_this()](boost::system::error_code ec, std::size_t bytes_transferred) {
           if (ec == ws::error::closed) return on_error(ec, "close on read");
           else if (ec) return on_error(ec, "read");
 
@@ -197,11 +198,12 @@ void session::send() {
 
       state_ = sending_state;
       ws_->async_write(boost::asio::buffer(out_buffer_),
-                       boost::asio::bind_executor(strand_, [this](boost::system::error_code ec, std::size_t bytes_transferred) {
+                       boost::asio::bind_executor(strand_,
+                          [this, self=shared_from_this()](boost::system::error_code ec, std::size_t bytes_transferred) {
                           verify_strand_in_this_thread(strand_, __func__, __LINE__);
                           if (ec) {
-                             ws_->next_layer().close();
-                             return on_error(ec, "write");
+                            ws_->next_layer().close();
+                            return on_error(ec, "write");
                           }
                           state_ = idle_state;
                           out_buffer_.resize(0);
@@ -257,6 +259,7 @@ void session::on_message(const icp_message& msg) {
 }
 
 void session::on(const hello& hi) {
+   ilog("received hello: peer id ${id}, peer chain id ${chain_id}, peer icp contract ${contract}, refer to my contract ${peer_contract}", ("id", hi.id)("chain_id", hi.chain_id)("contract", hi.contract)("peer_contract", hi.peer_contract));
 }
 
 void session::on(const ping& p) {

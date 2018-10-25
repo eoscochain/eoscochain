@@ -45,12 +45,12 @@ struct hello {
 };
 struct ping {
    fc::time_point sent;
-   fc::sha256     code;
-   uint32_t       lib; ///< the last irreversible block
+   fc::sha256 code;
+   uint32_t lib; ///< the last irreversible block
 };
 struct pong {
    fc::time_point sent;
-   fc::sha256     code;
+   fc::sha256 code;
 };
 
 using icp_message = fc::static_variant<
@@ -65,6 +65,8 @@ public:
    session(const string& peer, boost::asio::io_context& ioc, relay_ptr relay);
    ~session();
 
+   void do_accept();
+   void do_connect();
    void close();
 
    void post(std::function<void()> callback);

@@ -26,12 +26,10 @@ listener::listener(boost::asio::io_context& ioc, tcp::endpoint endpoint, relay_p
       log_error(ec, "listen");
       return;
    }
-
-   do_accept();
 }
 
 void listener::do_accept() {
-   acceptor_.async_accept(socket_, [self=shared_from_this()](auto ec){
+   acceptor_.async_accept(socket_, [self=shared_from_this()](auto ec) {
       self->on_accept(ec);
    });
 }
@@ -49,6 +47,7 @@ void listener::on_accept(boost::system::error_code ec) {
    try {
       auto s = std::make_shared<session>(move(socket_), relay_);
       relay_->async_add_session(s);
+      s->do_accept();
    } catch (std::exception& e) {
       socket_.close();
    }
@@ -59,10 +58,12 @@ void listener::on_accept(boost::system::error_code ec) {
 void relay::start() {
    ioc_ = std::make_unique<boost::asio::io_context>(num_threads_);
 
+   timer_ = std::make_shared<boost::asio::deadline_timer>(app().get_io_service());
    start_reconnect_timer();
 
    auto address = boost::asio::ip::make_address(endpoint_address_);
    listener_ = std::make_shared<listener>(*ioc_, tcp::endpoint{address, endpoint_port_}, shared_from_this());
+   listener_->do_accept();
 
    socket_threads_.reserve(num_threads_);
    for (auto i = 0; i < num_threads_; ++i) {
@@ -76,6 +77,7 @@ void relay::start() {
    for (const auto& peer: connect_to_peers_) {
       auto s = std::make_shared<session>(peer, *ioc_, shared_from_this());
       sessions_[s.get()] = s;
+      s->do_connect();
    }
 }
 
@@ -132,6 +134,7 @@ void relay::start_reconnect_timer() {
             wlog("attempt to connect to ${p}", ("p", peer));
             auto s = std::make_shared<session>(peer, *ioc_, shared_from_this());
             sessions_[s.get()] = s;
+            s->do_connect();
          }
       }
 
@@ -140,7 +143,7 @@ void relay::start_reconnect_timer() {
 }
 
 void relay::async_add_session(std::weak_ptr<session> s) {
-   app().get_io_service().post([s, this]{
+   app().get_io_service().post([s, this] {
       if (auto l = s.lock()) {
          sessions_[l.get()] = s;
       }
