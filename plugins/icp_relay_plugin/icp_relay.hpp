@@ -45,6 +45,8 @@ public:
 
    void for_each_session(std::function<void (session_ptr)> callback);
 
+   void open_channel(const vector<char> seed);
+
    std::string endpoint_address_;
    std::uint16_t endpoint_port_;
    std::uint32_t num_threads_ = 1;

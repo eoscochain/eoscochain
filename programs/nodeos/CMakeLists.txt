@@ -77,6 +77,7 @@ endif()
 target_link_libraries( ${NODE_EXECUTABLE_NAME} PRIVATE -Wl,${whole_archive_flag} kafka_plugin -Wl,${no_whole_archive_flag} )
 
 target_link_libraries( ${NODE_EXECUTABLE_NAME} PRIVATE -Wl,${whole_archive_flag} icp_relay_plugin -Wl,${no_whole_archive_flag} )
+target_link_libraries( ${NODE_EXECUTABLE_NAME} PRIVATE -Wl,${whole_archive_flag} icp_relay_api_plugin -Wl,${no_whole_archive_flag} )
 
 include(additionalPlugins)
 

@@ -170,4 +170,7 @@ void relay::for_each_session(std::function<void (session_ptr)> callback) {
    });
 }
 
+void relay::open_channel(const vector<char> seed) {
+}
+
 }

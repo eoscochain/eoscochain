@@ -3,6 +3,8 @@
 #include <appbase/application.hpp>
 #include <eosio/chain_plugin/chain_plugin.hpp>
 
+#include "api.hpp"
+
 namespace icp {
    class relay; // forward declaration
 }
@@ -23,6 +25,9 @@ public:
    void plugin_initialize(const variables_map& options);
    void plugin_startup();
    void plugin_shutdown();
+
+   icp::read_only get_read_only_api() const { return icp::read_only{relay_}; }
+   icp::read_write get_read_write_api() const { return icp::read_write{relay_}; }
 
 private:
    std::shared_ptr<class icp::relay> relay_;
