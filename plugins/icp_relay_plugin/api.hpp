@@ -65,11 +65,9 @@ public:
    explicit read_write(relay_ptr relay) : relay_(relay) {}
 
    struct open_channel_params {
-      string private_key; // the initial private key of the icp peer contract account, which should be replaced with multi-sig account after seed phase
       string seed_block_num_or_id;
    };
-   struct open_channel_results {
-   };
+   using open_channel_results = empty;
    // NB: the `open_channel` api can only be called once
    open_channel_results open_channel(const open_channel_params&);
 
@@ -86,5 +84,4 @@ FC_REFLECT(icp::read_only::get_info_results, (icp_version)(local_chain_id)(peer_
                                              (max_blocks)(current_blocks)(last_outgoing_packet_seq)(last_incoming_packet_seq)
                                              (last_outgoing_receipt_seq)(last_incoming_receipt_seq)
                                              (max_packets)(current_packets))
-FC_REFLECT(icp::read_write::open_channel_params, (private_key)(seed_block_num_or_id))
-FC_REFLECT(icp::read_write::open_channel_results, )
+FC_REFLECT(icp::read_write::open_channel_params, (seed_block_num_or_id))

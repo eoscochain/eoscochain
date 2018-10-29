@@ -128,12 +128,14 @@ read_write::open_channel_results read_write::open_channel(const open_channel_par
 
    EOS_ASSERT( b, unknown_block_exception, "Could not find reversible block: ${block}", ("block", seed_block_num_or_id));
 
+   auto n = block_header::num_from_id(b->id);
+   EOS_ASSERT(n <= controller.head_block_num() - 24, invalid_http_request, "Improper block number: ${n}", ("n", n)); // reduce possibility of block rollback
+
    auto header = static_cast<const block_header_state&>(*b);
 
-   relay_->open_channel(fc::raw::pack(header));
+   relay_->open_channel(header);
 
-   open_channel_results results;
-   return results;
+   return open_channel_results{};
 }
 
 }

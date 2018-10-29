@@ -12,6 +12,7 @@ using namespace eosio;
 using namespace eosio::chain;
 using namespace appbase;
 
+const action_name ACTION_OPENCHANNEL{"openchannel"};
 const action_name ACTION_ADDBLOCKS{"addblocks"};
 const action_name ACTION_ADDBLOCK{"addblock"};
 const action_name ACTION_SENDACTION{"sendaction"};
@@ -47,8 +48,8 @@ struct pong {
    fc::time_point sent;
    fc::sha256 code;
 };
-struct block_notice {
-   vector<block_id_type> block_ids;
+struct channel_seed {
+   block_header_state seed;
 };
 struct block_header_with_merkle_path {
    block_header_state block_header;
@@ -67,6 +68,7 @@ using icp_message = fc::static_variant<
    hello,
    ping,
    pong,
+   channel_seed,
    block_header_with_merkle_path,
    icp_actions
 >;
@@ -76,6 +78,7 @@ using icp_message = fc::static_variant<
 FC_REFLECT(icp::hello, (id)(chain_id)(contract)(peer_contract))
 FC_REFLECT(icp::ping, (sent)(code)(head))
 FC_REFLECT(icp::pong, (sent)(code))
+FC_REFLECT(icp::channel_seed, (seed))
 FC_REFLECT(icp::block_header_with_merkle_path, (block_header)(merkle_path))
 FC_REFLECT(icp::icp_actions, (block_header)(action_digests)(peer_actions)(actions)(action_receipts))
 FC_REFLECT(icp::icp_action, (action)(action_receipt)(block_id)(merkle_path))

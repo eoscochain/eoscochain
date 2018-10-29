@@ -322,7 +322,10 @@ void session::on(const hello& hi) {
 void session::on(const ping& p) {
    last_recv_ping_ = p;
    last_recv_ping_time_ = fc::time_point::now();
-   // TODO
+
+   app().get_io_service().post([=, self=shared_from_this()] {
+      relay_->peer_head_ = p.head; // TODO: check validity
+   });
 }
 
 void session::on(const pong& p) {
@@ -331,6 +334,16 @@ void session::on(const pong& p) {
       return;
    }
    last_sent_ping_.code = fc::sha256(); // reset
+}
+
+void session::on(const channel_seed& s) {
+   auto data = fc::raw::pack(s.seed);
+   app().get_io_service().post([=, self=shared_from_this()] {
+      action a;
+      a.name = ACTION_OPENCHANNEL;
+      a.data = data;
+      relay_->push_transaction(vector<action>{a});
+   });
 }
 
 void session::on(const block_header_with_merkle_path& b) {

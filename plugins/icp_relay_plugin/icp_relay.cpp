@@ -197,9 +197,8 @@ void relay::send(const icp_message& msg) {
    });
 }
 
-void relay::open_channel(const vector<char>& seed) {
-   auto& chain = app().get_plugin<chain_plugin>();
-   auto rw_api = chain.get_read_write_api();
+void relay::open_channel(const block_header_state& seed) {
+   send(channel_seed{seed});
 }
 
 void relay::on_applied_transaction(const transaction_trace_ptr& t) {

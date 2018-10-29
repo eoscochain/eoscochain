@@ -78,6 +78,7 @@ private:
    void on(const hello& hi);
    void on(const ping& p);
    void on(const pong& p);
+   void on(const channel_seed& s);
    void on(const block_header_with_merkle_path& b);
    void on(const icp_actions& ia);
 

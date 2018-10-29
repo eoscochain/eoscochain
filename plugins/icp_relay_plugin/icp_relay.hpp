@@ -56,7 +56,7 @@ public:
 
    // void send_icp_transaction();
 
-   void open_channel(const vector<char>& seed);
+   void open_channel(const block_header_state& seed);
    void push_transaction(vector<action> actions, packed_transaction::compression_type compression = packed_transaction::none);
 
    std::string endpoint_address_;
@@ -70,6 +70,8 @@ public:
    chain_id_type peer_chain_id_;
    vector<chain::permission_level> signer_;
    flat_set<public_key_type> signer_required_keys_;
+
+   head peer_head_;
 
 private:
    void on_applied_transaction(const transaction_trace_ptr& t);
@@ -101,7 +103,6 @@ private:
    uint32_t pending_schedule_version_ = 0;
 
    head local_head_;
-   head peer_head_;
 };
 
 }
