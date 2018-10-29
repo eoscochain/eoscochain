@@ -59,6 +59,7 @@ public:
       ) override;
 
    bool                   is_producer_key(const chain::public_key_type& key) const;
+   flat_set<chain::public_key_type> get_producer_keys() const;
    chain::signature_type  sign_compact(const chain::public_key_type& key, const fc::sha256& digest) const;
 
    virtual void plugin_initialize(const boost::program_options::variables_map& options);

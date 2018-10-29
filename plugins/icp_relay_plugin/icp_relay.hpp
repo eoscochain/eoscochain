@@ -9,8 +9,11 @@
 #include <boost/asio/ip/tcp.hpp>
 
 #include <eosio/chain_plugin/chain_plugin.hpp>
+#include <eosio/chain/plugin_interface.hpp>
 
 #include "session.hpp"
+#include "cache.hpp"
+#include "api.hpp"
 
 namespace icp {
 
@@ -18,7 +21,9 @@ using namespace std;
 using tcp = boost::asio::ip::tcp;
 namespace ws = boost::beast::websocket;
 
+using namespace eosio;
 using namespace eosio::chain;
+using namespace eosio::chain::plugin_interface;
 
 class listener : public std::enable_shared_from_this<listener> {
 public:
@@ -38,14 +43,21 @@ public:
    void start();
    void stop();
 
+   read_only get_read_only_api() { return read_only{shared_from_this()}; }
+   read_write get_read_write_api() { return read_write{shared_from_this()}; }
+
    void start_reconnect_timer();
 
    void async_add_session(std::weak_ptr<session> s);
    void on_session_close(const session* s);
 
    void for_each_session(std::function<void (session_ptr)> callback);
+   void send(const icp_message& msg);
 
-   void open_channel(const vector<char> seed);
+   // void send_icp_transaction();
+
+   void open_channel(const vector<char>& seed);
+   void push_transaction(vector<action> actions, packed_transaction::compression_type compression = packed_transaction::none);
 
    std::string endpoint_address_;
    std::uint16_t endpoint_port_;
@@ -56,13 +68,40 @@ public:
    account_name local_contract_;
    account_name peer_contract_;
    chain_id_type peer_chain_id_;
+   vector<chain::permission_level> signer_;
+   flat_set<public_key_type> signer_required_keys_;
 
 private:
+   void on_applied_transaction(const transaction_trace_ptr& t);
+   void on_accepted_block(const block_state_with_action_digests_ptr& b);
+   void on_irreversible_block(const block_state_ptr& s);
+   void on_bad_block(const signed_block_ptr& b);
+
+   // void push_icp_transaction();
+   // void cache_transaction();
+
    std::unique_ptr<boost::asio::io_context> ioc_;
    std::vector<std::thread> socket_threads_;
    std::shared_ptr<listener> listener_;
    std::shared_ptr<boost::asio::deadline_timer> timer_; // only access on app io_service
    std::map<const session*, std::weak_ptr<session>> sessions_; // only access on app io_service
+
+   channels::applied_transaction::channel_type::handle on_applied_transaction_handle_;
+   channels::accepted_block_with_action_digests::channel_type::handle on_accepted_block_handle_;
+   channels::irreversible_block::channel_type::handle on_irreversible_block_handle_;
+   channels::rejected_block::channel_type::handle on_bad_block_handle_;
+
+   fc::microseconds tx_expiration_ = fc::seconds(30);
+   uint8_t  tx_max_cpu_usage_ = 0;
+   uint32_t tx_max_net_usage_ = 0;
+   uint32_t delaysec_ = 0;
+
+   send_transaction_index send_transactions_;
+   block_with_action_digests_index block_with_action_digests_;
+   uint32_t pending_schedule_version_ = 0;
+
+   head local_head_;
+   head peer_head_;
 };
 
 }

@@ -108,6 +108,8 @@ struct pending_state {
 
    vector<action_receipt>             _actions;
 
+   vector<digest_type>                _action_digests;
+
    controller::block_status           _block_status = controller::block_status::incomplete;
 
    optional<block_id_type>            _producer_block_id;
@@ -694,6 +696,8 @@ struct controller_impl {
          }
 
          emit( self.accepted_block, pending->_pending_block_state );
+         emit( self.accepted_block_with_action_digests,
+            std::make_shared<block_state_with_action_digests>(pending->_pending_block_state, pending->_action_digests) );
       } catch (...) {
          // dont bother resetting pending, instead abort the block
          reset_pending_on_exit.cancel();
@@ -1352,6 +1356,8 @@ struct controller_impl {
       action_digests.reserve( pending->_actions.size() );
       for( const auto& a : pending->_actions )
          action_digests.emplace_back( a.digest() );
+
+      pending->_action_digests = action_digests;
 
       pending->_pending_block_state->header.action_mroot = merkle( move(action_digests) );
    }

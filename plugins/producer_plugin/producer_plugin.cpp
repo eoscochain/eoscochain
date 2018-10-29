@@ -538,6 +538,14 @@ bool producer_plugin::is_producer_key(const chain::public_key_type& key) const
   return false;
 }
 
+flat_set<chain::public_key_type> producer_plugin::get_producer_keys() const {
+   flat_set<chain::public_key_type> keys;
+   for (auto& p: my->_signature_providers) {
+      keys.insert(p.first);
+   }
+   return keys;
+}
+
 chain::signature_type producer_plugin::sign_compact(const chain::public_key_type& key, const fc::sha256& digest) const
 {
   if(key != chain::public_key_type()) {

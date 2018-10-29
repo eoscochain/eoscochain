@@ -20,7 +20,7 @@ struct icp : public contract {
     [[eosio::action]]
     void setmaxblocks(uint32_t maxblocks);
 
-   [[eosio::action]]
+    [[eosio::action]]
     void openchannel(const bytes& data); // initialize with a block_header_state as trust seed
     [[eosio::action]]
     void closechannel();

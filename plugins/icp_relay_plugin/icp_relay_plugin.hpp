@@ -26,8 +26,8 @@ public:
    void plugin_startup();
    void plugin_shutdown();
 
-   icp::read_only get_read_only_api() const { return icp::read_only{relay_}; }
-   icp::read_write get_read_write_api() const { return icp::read_write{relay_}; }
+   icp::read_only get_read_only_api();
+   icp::read_write get_read_write_api();
 
 private:
    std::shared_ptr<class icp::relay> relay_;

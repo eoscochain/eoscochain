@@ -29,6 +29,15 @@ namespace eosio { namespace chain {
 
    using block_state_ptr = std::shared_ptr<block_state>;
 
+   struct block_state_with_action_digests {
+      block_state_ptr block_state;
+      vector<digest_type> action_digests;
+
+      block_state_with_action_digests(block_state_ptr b, const vector<digest_type>& a) : block_state(b), action_digests(a) {}
+   };
+
+   using block_state_with_action_digests_ptr = std::shared_ptr<block_state_with_action_digests>;
+
 } } /// namespace eosio::chain
 
 FC_REFLECT_DERIVED( eosio::chain::block_state, (eosio::chain::block_header_state), (block)(validated)(in_current_chain) )

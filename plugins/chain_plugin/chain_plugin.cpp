@@ -147,6 +147,7 @@ public:
    :pre_accepted_block_channel(app().get_channel<channels::pre_accepted_block>())
    ,accepted_block_header_channel(app().get_channel<channels::accepted_block_header>())
    ,accepted_block_channel(app().get_channel<channels::accepted_block>())
+   ,accepted_block_with_action_digests_channel(app().get_channel<channels::accepted_block_with_action_digests>())
    ,irreversible_block_channel(app().get_channel<channels::irreversible_block>())
    ,accepted_transaction_channel(app().get_channel<channels::accepted_transaction>())
    ,applied_transaction_channel(app().get_channel<channels::applied_transaction>())
@@ -176,6 +177,7 @@ public:
    channels::pre_accepted_block::channel_type&     pre_accepted_block_channel;
    channels::accepted_block_header::channel_type&  accepted_block_header_channel;
    channels::accepted_block::channel_type&         accepted_block_channel;
+   channels::accepted_block_with_action_digests::channel_type& accepted_block_with_action_digests_channel;
    channels::irreversible_block::channel_type&     irreversible_block_channel;
    channels::accepted_transaction::channel_type&   accepted_transaction_channel;
    channels::applied_transaction::channel_type&    applied_transaction_channel;
@@ -196,6 +198,7 @@ public:
    fc::optional<scoped_connection>                                   pre_accepted_block_connection;
    fc::optional<scoped_connection>                                   accepted_block_header_connection;
    fc::optional<scoped_connection>                                   accepted_block_connection;
+   fc::optional<scoped_connection>                                   accepted_block_with_action_digests_connection;
    fc::optional<scoped_connection>                                   irreversible_block_connection;
    fc::optional<scoped_connection>                                   accepted_transaction_connection;
    fc::optional<scoped_connection>                                   applied_transaction_connection;
@@ -667,6 +670,10 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
          my->accepted_block_channel.publish( blk );
       } );
 
+      my->accepted_block_with_action_digests_connection = my->chain->accepted_block_with_action_digests.connect( [this]( const block_state_with_action_digests_ptr& blk ) {
+         my->accepted_block_with_action_digests_channel.publish( blk );
+      } );
+
       my->irreversible_block_connection = my->chain->irreversible_block.connect( [this]( const block_state_ptr& blk ) {
          my->irreversible_block_channel.publish( blk );
       } );
@@ -728,6 +735,7 @@ void chain_plugin::plugin_shutdown() {
    my->pre_accepted_block_connection.reset();
    my->accepted_block_header_connection.reset();
    my->accepted_block_connection.reset();
+   my->accepted_block_with_action_digests_connection.reset();
    my->irreversible_block_connection.reset();
    my->accepted_transaction_connection.reset();
    my->applied_transaction_connection.reset();

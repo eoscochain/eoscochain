@@ -164,7 +164,9 @@ void fork_store::prune(const stored_block_header_state& block_state) {
 
 void fork_store::cutdown(uint32_t block_num) {
     auto head = *_block_states.get_index<N(libblocknum)>().begin();
-    eosio_assert(block_num <= head.last_irreversible_blocknum(), "block number not irreversible");
+    auto lib = head.last_irreversible_blocknum();
+    eosio_assert(block_num <= lib, "block number not irreversible");
+    if (block_num == lib) block_num = lib - 1; // retain the lib for query convenience
 
     {
         auto by_blocknum = _block_states.get_index<N(blocknum)>();

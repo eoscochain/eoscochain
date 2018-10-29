@@ -192,6 +192,27 @@ void session::wait_on_app() {
    );
 }
 
+bool session::send_ping() {
+   auto delta_t = fc::time_point::now() - last_sent_ping_.sent;
+   if (delta_t < fc::seconds(3)) return false;
+
+   if (last_sent_ping_.code == fc::sha256()) {
+      last_sent_ping_.sent = fc::time_point::now();
+      last_sent_ping_.code = fc::sha256::hash(last_sent_ping_.sent); /// TODO: make this more random
+      last_sent_ping_.head = local_head_;
+      send(last_sent_ping_);
+   }
+   return true;
+}
+
+bool session::send_pong() {
+   if (last_recv_ping_.code == fc::sha256()) return false;
+
+   send(pong{fc::time_point::now(), last_recv_ping_.code});
+   last_recv_ping_.code = fc::sha256(); // reset
+   return true;
+}
+
 void session::send() {
    try {
       verify_strand_in_this_thread(strand_, __func__, __LINE__);
@@ -223,12 +244,24 @@ void session::send(const icp_message& msg) {
    } FC_LOG_AND_RETHROW()
 }
 
+void session::buffer_send(icp_message&& msg) {
+   msg_buffer_.push_back(move(msg));
+}
+
 void session::maybe_send_next_message() {
    verify_strand_in_this_thread(strand_, __func__, __LINE__);
    if (state_ == sending_state) return; // in process of sending
-   if(out_buffer_.size()) return; // in process of sending
-   if(!recv_remote_hello_ || !sent_remote_hello_) return;
+   if (out_buffer_.size()) return; // in process of sending
+   if (!recv_remote_hello_ || !sent_remote_hello_) return;
 
+   if (send_pong()) return;
+   if (send_ping()) return;
+
+   if (not msg_buffer_.empty()) {
+      auto msg = msg_buffer_.front();
+      send(msg);
+      msg_buffer_.pop_front();
+   }
    // TODO
 }
 
@@ -258,13 +291,38 @@ void session::on_message(const icp_message& msg) {
    }
 }
 
+void session::check_for_redundant_connection() {
+   app().get_io_service().post([self=shared_from_this()] {
+      self->relay_->for_each_session([self](auto s) {
+         if (s != self && s->peer_id_ == self->peer_id_) {
+            self->close();
+         }
+      });
+   });
+}
+
 void session::on(const hello& hi) {
    ilog("received hello: peer id ${id}, peer chain id ${chain_id}, peer icp contract ${contract}, refer to my contract ${peer_contract}", ("id", hi.id)("chain_id", hi.chain_id)("contract", hi.contract)("peer_contract", hi.peer_contract));
+
+   if (hi.chain_id != app().get_plugin<chain_plugin>().get_chain_id()) {
+      elog("bad peer: wrong chain id");
+      return close();
+   }
+
+   if (hi.id == relay_->id_) {
+      // connect to self
+      return close();
+   }
+
+   peer_id_ = hi.id;
+
+   check_for_redundant_connection();
 }
 
 void session::on(const ping& p) {
    last_recv_ping_ = p;
    last_recv_ping_time_ = fc::time_point::now();
+   // TODO
 }
 
 void session::on(const pong& p) {
@@ -272,7 +330,59 @@ void session::on(const pong& p) {
       close();
       return;
    }
-   last_sent_ping_.code = fc::sha256();
+   last_sent_ping_.code = fc::sha256(); // reset
+}
+
+void session::on(const block_header_with_merkle_path& b) {
+   auto ro = relay_->get_read_only_api();
+   auto head = ro.get_head();
+
+   if (not head) {
+      elog("local head not found, maybe icp channel not opened");
+      return;
+   }
+
+   auto first_num = b.block_header.block_num;
+   if (not b.merkle_path.empty()) {
+      first_num = block_header::num_from_id(b.merkle_path.front());
+   }
+
+   if (first_num != head->head_block_num + 1) {
+      elog("unlinkable block: has ${has}, got ${got}", ("has", head->head_block_num)("got", first_num));
+      return;
+   }
+   // TODO: more check and workaround
+
+   auto data = fc::raw::pack(b);
+
+   app().get_io_service().post([=, self=shared_from_this()] {
+      action a;
+      a.name = ACTION_ADDBLOCKS;
+      a.data = data;
+      relay_->push_transaction(vector<action>{a});
+   });
+}
+
+void session::on(const icp_actions& ia) {
+   auto block_id = ia.block_header.id();
+   auto data = fc::raw::pack(ia.block_header);
+
+   app().get_io_service().post([=, self=shared_from_this()] {
+      action a;
+      a.name = ACTION_ADDBLOCK;
+      a.data = data;
+      relay_->push_transaction(vector<action>{a}); // TODO: check block existing
+   });
+
+   // TODO: rate limiting, cache, and retry
+   for (size_t i = 0; i < ia.peer_actions.size(); ++i) {
+      action a;
+      a.name = ia.peer_actions[i];
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, ia.action_digests});
+      app().get_io_service().post([=, self=shared_from_this()] {
+         relay_->push_transaction(vector<action>{a});
+      });
+   }
 }
 
 }

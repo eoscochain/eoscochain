@@ -12,6 +12,39 @@ using namespace eosio;
 
 const string ICP_VERSION = "icp-0.0.1";
 
+std::shared_ptr<head> read_only::get_head() const {
+   auto& chain = app().get_plugin<chain_plugin>();
+   auto ro_api = chain.get_read_only_api();
+
+   chain_apis::read_only::get_table_rows_params p;
+   p.json = true;
+   p.code = relay_->local_contract_;
+   p.scope = relay_->local_contract_.to_string();
+   p.table = "blockstate";
+   p.limit = 1;
+   p.key_type = "i128";
+   p.index_position = "5"; // libblocknum
+   auto blockstates = ro_api.get_table_rows(p);
+   if (blockstates.rows.empty()) return nullptr;
+
+   auto& row = blockstates.rows.front();
+   std::shared_ptr<head> h = std::make_shared<head>();
+   h->head_block_num = static_cast<uint32_t>(row["block_num"].as_uint64());
+   h->head_block_id = block_id_type(row["id"].as_string());
+   h->last_irreversible_block_num = static_cast<uint32_t>(std::max(row["dpos_irreversible_blocknum"].as_uint64(), row["bft_irreversible_blocknum"].as_uint64()));
+
+
+   p.table = "block";
+   p.key_type = "i64";
+   p.index_position = "4"; // blocknum
+   auto blocks = ro_api.get_table_rows(p); // TODO: is this right?
+   if (not blocks.rows.empty()) {
+      h->last_irreversible_block_id = block_id_type(blocks.rows.front()["id"].as_string());
+   }
+
+   return h;
+}
+
 read_only::get_info_results read_only::get_info(const get_info_params&) const {
    auto& chain = app().get_plugin<chain_plugin>();
 
@@ -24,33 +57,20 @@ read_only::get_info_results read_only::get_info(const get_info_params&) const {
 
    auto ro_api = chain.get_read_only_api();
 
+   auto head = get_head();
+   if (head) {
+      info.head_block_num = head->head_block_num;
+      info.head_block_id = head->head_block_id;
+      info.last_irreversible_block_num = head->last_irreversible_block_num;
+      info.last_irreversible_block_id = head->last_irreversible_block_id;
+   }
+
    chain_apis::read_only::get_table_rows_params p;
    p.json = true;
    p.code = relay_->local_contract_;
    p.scope = relay_->local_contract_.to_string();
-   p.table = "blockstate";
-   p.limit = 1;
-   p.key_type = "i128";
-   p.index_position = "5"; // libblocknum
-   auto blockstates = ro_api.get_table_rows(p);
-   if (not blockstates.rows.empty()) {
-      auto& row = blockstates.rows.front();
-      info.head_block_num = static_cast<uint32_t>(row["block_num"].as_uint64());
-      info.head_block_id = block_id_type(row["id"].as_string());
-      // info.head_block_time
-      info.last_irreversible_block_num = static_cast<uint32_t>(std::max(row["dpos_irreversible_blocknum"].as_uint64(), row["bft_irreversible_blocknum"].as_uint64()));
-
-
-      p.table = "block";
-      p.key_type = "i64";
-      p.index_position = "4"; // blocknum
-      auto blocks = ro_api.get_table_rows(p);
-      if (not blocks.rows.empty()) {
-         info.last_irreversible_block_id = block_id_type(blocks.rows.front()["id"].as_string());
-      }
-   }
-
    p.table = "storemeter";
+   p.limit = 1;
    p.key_type = "";
    p.index_position = "";
    auto storemeter = ro_api.get_table_rows(p);

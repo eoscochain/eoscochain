@@ -12,6 +12,9 @@
 #include <eosio/chain_plugin/chain_plugin.hpp>
 #include <appbase/application.hpp>
 
+#include "message.hpp"
+#include "api.hpp"
+
 namespace icp {
 
 using namespace std;
@@ -37,28 +40,6 @@ void verify_strand_in_this_thread(const Strand& strand, const char* func, int li
    }
 }
 
-struct hello {
-   public_key_type id; // sender id
-   chain_id_type chain_id; // sender chain id
-   account_name contract; // sender contract name
-   account_name peer_contract; // receiver contract name
-};
-struct ping {
-   fc::time_point sent;
-   fc::sha256 code;
-   uint32_t lib; ///< the last irreversible block
-};
-struct pong {
-   fc::time_point sent;
-   fc::sha256 code;
-};
-
-using icp_message = fc::static_variant<
-   hello,
-   ping,
-   pong
->;
-
 class session : public std::enable_shared_from_this<session> {
 public:
    session(tcp::socket socket, relay_ptr relay);
@@ -71,6 +52,9 @@ public:
 
    void post(std::function<void()> callback);
 
+   void buffer_send(icp_message&& msg);
+
+   head local_head_;
    string peer_;
 
    int session_id_;
@@ -83,14 +67,19 @@ private:
    void do_hello();
    void do_read();
    void wait_on_app();
+   bool send_ping();
+   bool send_pong();
    void send();
    void send(const icp_message& msg);
    void maybe_send_next_message();
    void on_message(const icp_message& msg);
+   void check_for_redundant_connection();
 
    void on(const hello& hi);
    void on(const ping& p);
    void on(const pong& p);
+   void on(const block_header_with_merkle_path& b);
+   void on(const icp_actions& ia);
 
    enum session_state {
       hello_state,
@@ -110,11 +99,13 @@ private:
    string remote_host_;
    string remote_port_;
 
+   deque<icp_message> msg_buffer_;
    vector<char> out_buffer_;
    boost::beast::flat_buffer in_buffer_;
 
    bool recv_remote_hello_ = false;
    bool sent_remote_hello_ = false;
+   public_key_type peer_id_;
 
    fc::time_point last_recv_ping_time_ = fc::time_point::now();
    ping last_recv_ping_;
@@ -124,7 +115,3 @@ private:
 using session_ptr = std::shared_ptr<session>;
 
 }
-
-FC_REFLECT(icp::hello, (id)(chain_id)(contract)(peer_contract))
-FC_REFLECT(icp::ping, (sent)(code)(lib))
-FC_REFLECT(icp::pong, (sent)(code))

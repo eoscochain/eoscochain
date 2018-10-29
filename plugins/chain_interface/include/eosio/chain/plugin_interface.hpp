@@ -26,6 +26,7 @@ namespace eosio { namespace chain { namespace plugin_interface {
       using rejected_block         = channel_decl<struct rejected_block_tag,        signed_block_ptr>;
       using accepted_block_header  = channel_decl<struct accepted_block_header_tag, block_state_ptr>;
       using accepted_block         = channel_decl<struct accepted_block_tag,        block_state_ptr>;
+      using accepted_block_with_action_digests = channel_decl<struct accepted_block_with_action_digests_tag, block_state_with_action_digests_ptr>;
       using irreversible_block     = channel_decl<struct irreversible_block_tag,    block_state_ptr>;
       using accepted_transaction   = channel_decl<struct accepted_transaction_tag,  transaction_metadata_ptr>;
       using applied_transaction    = channel_decl<struct applied_transaction_tag,   transaction_trace_ptr>;
