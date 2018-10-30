@@ -5,7 +5,6 @@
 #include <eosiolib/public_key.hpp>
 
 #include "hash.hpp"
-#include "fork.hpp"
 
 #include "merkle.cpp"
 #include "types.cpp"

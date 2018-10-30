@@ -7,6 +7,7 @@
 #include <eosiolib/singleton.hpp>
 
 #include "types.hpp"
+#include "fork.hpp"
 
 namespace eosio {
 
@@ -70,7 +71,7 @@ private:
     typedef eosio::singleton<N(icpmeter), icp_meter> meter_singleton;
 
     peer_contract _peer;
-    std::unique_ptr<class fork_store> store;
+    std::unique_ptr<fork_store> store;
 };
 
 }
