@@ -58,7 +58,8 @@ namespace icp {
    }
 
    void token::icpreceive(account_name contract, account_name icp_from, account_name to, asset quantity, string memo, bool refund) {
-      require_auth(_self);
+      // NB: this permission should be authorized to icp contract's `eosio.code` permission
+      require_auth2(_self, N(callback));
 
       eosio_assert(memo.size() <= 256, "memo has more than 256 bytes");
 
@@ -71,7 +72,8 @@ namespace icp {
    }
 
    void token::icpreceipt(uint64_t seq, receipt_status status, bytes data) {
-      require_auth(_self);
+      // NB: this permission should be authorized to icp contract's `eosio.code` permission
+      require_auth2(_self, N(callback));
 
       locked l(_self, _self);
       auto it = l.find(seq);

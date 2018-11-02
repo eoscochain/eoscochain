@@ -9,6 +9,8 @@ namespace icp {
 using namespace std;
 using namespace eosio::chain;
 
+void try_catch(std::function<void()> exec, const std::string& desc = "");
+
 class relay; // forward declaration
 using relay_ptr = std::shared_ptr<relay>;
 
@@ -22,13 +24,17 @@ struct head {
 
    // uint32_t active_schedule_version = 0;
    // uint32_t pending_schedule_version = 0;
+
+   bool valid() const { return head_block_num > 0 and last_irreversible_block_num > 0; }
 };
+
+using head_ptr = std::shared_ptr<head>;
 
 class read_only {
 public:
    explicit read_only(relay_ptr relay) : relay_(std::move(relay)) {}
 
-   std::shared_ptr<head> get_head() const;
+   head_ptr get_head() const;
 
    using get_info_params = empty;
    struct get_info_results {

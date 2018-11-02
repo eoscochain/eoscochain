@@ -68,8 +68,10 @@ struct block_header {
     static uint32_t num_from_id(const block_id_type& id);
     uint32_t block_num() const;
     block_id_type id() const;
+    digest_type digest() const;
 
    // explicit serialization macro is not necessary, used here only to improve compilation time
+   // NB: Here serialization order is the same as in "libraries/chain/include/eosio/chain/block_header.hpp"
    EOSLIB_SERIALIZE(block_header, (timestamp)(producer)(confirmed)(previous)(transaction_mroot)(action_mroot)
                                   (schedule_version)(new_producers)(header_extensions))
 };
@@ -85,11 +87,17 @@ struct header_confirmation {
    EOSLIB_SERIALIZE(header_confirmation, (block_id)(producer)(producer_signature))
 };
 
+struct signed_block_header : block_header {
+   signature producer_signature;
+
+   EOSLIB_SERIALIZE_DERIVED(signed_block_header, block_header, (producer_signature))
+};
+
 struct block_header_state {
     block_id_type id;
     uint32_t block_num;
 
-    block_header header;
+    signed_block_header header;
 
     // participate in signing process
     incremental_merkle blockroot_merkle; // merkle root of block ids
@@ -97,8 +105,6 @@ struct block_header_state {
 
     // public key of producer who produced this block
     ::public_key block_signing_key;
-    // signature of producer who produced this block
-    signature producer_signature;
 
     uint32_t dpos_proposed_irreversible_blocknum; // BFT-DPOS proposed irreversible block number
     uint32_t dpos_irreversible_blocknum; // BFT-DPOS irreversible block number
@@ -123,11 +129,30 @@ struct block_header_state {
     uint32_t calc_dpos_last_irreversible() const;
 
    // explicit serialization macro is not necessary, used here only to improve compilation time
-   EOSLIB_SERIALIZE(block_header_state, (id)(block_num)(header)(blockroot_merkle)(pending_schedule_hash)(block_signing_key)
-                                        (producer_signature)(dpos_proposed_irreversible_blocknum)(dpos_irreversible_blocknum)
+   /* EOSLIB_SERIALIZE(block_header_state, (id)(block_num)(header)(blockroot_merkle)(pending_schedule_hash)(block_signing_key)
+                                        (dpos_proposed_irreversible_blocknum)(dpos_irreversible_blocknum)
                                         (bft_irreversible_blocknum)(pending_schedule_lib_num)(pending_schedule)(active_schedule)
-                                        (producer_to_last_produced)(producer_to_last_implied_irb)(confirm_count)(confirmations))
+                                        (producer_to_last_produced)(producer_to_last_implied_irb)(confirm_count)(confirmations)) */
+   // NB: Here serialization order is the same as in "libraries/chain/include/eosio/chain/block_header_state.hpp"
+   EOSLIB_SERIALIZE(block_header_state,
+      (id)(block_num)(header)(dpos_proposed_irreversible_blocknum)(dpos_irreversible_blocknum)(bft_irreversible_blocknum)
+      (pending_schedule_lib_num)(pending_schedule_hash)
+      (pending_schedule)(active_schedule)(blockroot_merkle)
+      (producer_to_last_produced)(producer_to_last_implied_irb)(block_signing_key)
+      (confirm_count)(confirmations)
+   )
 };
+
+/*
+struct block_header_state : block_header_state_base {
+   // signature of producer who produced this block
+   signature producer_signature;
+
+   void validate() const;
+
+   EOSLIB_SERIALIZE_DERIVED(block_header_state, block_header_state_base, (producer_signature))
+};
+*/
 
 using block_header_state_ptr = std::shared_ptr<block_header_state>;
 
@@ -158,15 +183,22 @@ struct action_receipt {
    EOSLIB_SERIALIZE(action_receipt, (receiver)(act_digest)(global_sequence)(recv_sequence)(auth_sequence)(code_sequence)(abi_sequence))
 };
 
-// @abi table icp_action i64
-struct icp_action {
+// @abi table icpaction i64
+struct [[eosio::action]] icpaction {
    bytes action;
    bytes action_receipt;
-   block_id_type block_id;
-   vector<checksum256> merkle_path;
+   checksum256 block_id;
+   bytes merkle_path;
 
    // explicit serialization macro is not necessary, used here only to improve compilation time
-   EOSLIB_SERIALIZE(icp_action, (action)(action_receipt)(block_id)(merkle_path))
+   EOSLIB_SERIALIZE(icpaction, (action)(action_receipt)(block_id)(merkle_path))
+};
+
+enum class receipt_status : uint8_t {
+  unknown = 0,
+  executed = 1,
+  expired = 2
+  // failed = 3
 };
 
 struct [[eosio::table]] icp_packet {
@@ -176,18 +208,11 @@ struct [[eosio::table]] icp_packet {
     uint32_t expiration; // the expiration time in comparison to current block timestamp on destination chain, in seconds
     bytes send_action;
     bytes receipt_action; // includes `account` and `name`, but no `authorization` or `data`
-    uint8_t status;
+    uint8_t status = static_cast<uint8_t>(receipt_status::unknown);
 
-    bool shadow = false;
+    uint8_t shadow = false;
 
     uint64_t primary_key() const { return seq; }
-};
-
-enum class receipt_status : uint8_t {
-    unknown = 0,
-    executed = 1,
-    expired = 2
-    // failed = 3
 };
 
 struct [[eosio::table]] icp_receipt {
@@ -198,7 +223,7 @@ struct [[eosio::table]] icp_receipt {
     uint8_t status;
     bytes data; // extra data
 
-    bool shadow = false;
+    uint8_t shadow = false;
 
     uint64_t primary_key() const { return seq; }
     uint64_t by_pseq() const { return pseq; }

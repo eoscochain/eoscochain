@@ -77,7 +77,8 @@ void fork_store::add_block_header_with_merkle_path(const block_header_state& h, 
     bool producer_scheduler_changed = (sha256(h.active_schedule) != sha256(current_producer_schedule));
     if (producer_scheduler_changed) {
         auto p = _pending_schedule.get();
-        eosio_assert(sha256(h.active_schedule) == sha256(p.pending_schedule), "mismatched schedule");
+        auto pending_schedule = unpack<producer_schedule>(p.pending_schedule);
+        eosio_assert(sha256(h.active_schedule) == sha256(pending_schedule), "mismatched schedule");
 
         eosio_assert(h.pending_schedule_hash == sha256(h.active_schedule), "invalid new producers");
         eosio_assert(h.active_schedule.version + 1 == h.pending_schedule.version, "invalid producer schedule version");
@@ -90,15 +91,17 @@ void fork_store::add_block_header_with_merkle_path(const block_header_state& h, 
     // To allow following block headers discontinuously, the skipped block ids should be used to compose the merkle proof
     block_id_type prev_id = merkle_path.empty() ? h.header.previous : merkle_path.front();
     auto mroot = get_block_mroot(prev_id); // first
+    mroot.append(prev_id);
     if (!merkle_path.empty()) {
+        auto by_blockid = _blocks.get_index<N(blockid)>();
+        // TODO: acceleration optimization
         for (auto it = merkle_path.cbegin() + 1, pit = merkle_path.cbegin(); it != merkle_path.cend(); pit = it++) {
             mroot.append(*it); // intermediate
-
-            add_block_id(*it, *pit);
+            add_block_id(by_blockid, *it, *pit);
         }
         meter_add_blocks(merkle_path.size() - 1);
     }
-    mroot.append(h.id); // last
+    // mroot.append(h.id); // last
     eosio_assert(h.blockroot_merkle.get_root() == mroot.get_root(), "unlinkable block");
 
     add_block_state(h);
@@ -117,7 +120,7 @@ void fork_store::add_block_state(const block_header_state& block_state) {
        b.previous = block_state.header.previous;
        b.dpos_irreversible_blocknum = block_state.dpos_irreversible_blocknum;
        b.bft_irreversible_blocknum = block_state.bft_irreversible_blocknum;
-       b.blockroot_merkle = block_state.blockroot_merkle;
+       b.blockroot_merkle = pack(block_state.blockroot_merkle);
     });
 
     _blocks.emplace(_code, [&](auto& b) {
@@ -156,6 +159,10 @@ void fork_store::prune(const stored_block_header_state& block_state) {
 
     by_blocknum = _block_states.get_index<N(blocknum)>();
     for (auto it = by_blocknum.lower_bound(num); it != by_blocknum.end() && it->block_num == num;) {
+        if (it->id == block_state.id) { // bypass myself
+            ++it;
+            continue;
+        }
         auto id = it->id;
         ++it;
         remove(id);
@@ -238,7 +245,7 @@ void fork_store::add_block_header(const block_header& h) {
     });
 }
 
-void fork_store::add_block_id(const block_id_type& block_id, const block_id_type& previous) {
+/* void fork_store::add_block_id(const block_id_type& block_id, const block_id_type& previous) {
     auto by_blockid = _blocks.get_index<N(blockid)>();
     eosio_assert(by_blockid.find(to_key256(block_id)) == by_blockid.end(), "already existing block");
 
@@ -249,10 +256,10 @@ void fork_store::add_block_id(const block_id_type& block_id, const block_id_type
         o.previous = previous;
         // absent `action_mroot`
     });
-}
+} */
 
 bool fork_store::is_producer(account_name name, const ::public_key& key) {
-    auto schedule = _active_schedule.get();
+    auto schedule = unpack<producer_schedule>(_active_schedule.get().producer_schedule);
     for (auto& p: schedule.producers) {
         if (p.producer_name == name && p.block_signing_key == key) {
            return true;
@@ -262,33 +269,35 @@ bool fork_store::is_producer(account_name name, const ::public_key& key) {
 }
 
 producer_schedule fork_store::get_producer_schedule() {
-    return _active_schedule.get();
+    return unpack<producer_schedule>(_active_schedule.get().producer_schedule);
 }
 
 void fork_store::update_active_schedule(const producer_schedule &schedule, bool clear_pending) {
-    _active_schedule.set(schedule, _code);
+    _active_schedule.set(stored_producer_schedule{pack(schedule)}, _code);
 
     if (clear_pending) {
         auto s = _pending_schedule.get();
-        s.pending_schedule.producers.clear(); // clear producers, same as in the call `maybe_promote_pending()`
+        auto pending_schedule = unpack<producer_schedule>(s.pending_schedule);
+        pending_schedule.producers.clear(); // clear producers, same as in the call `maybe_promote_pending()`
+        s.pending_schedule = pack(pending_schedule);
         _pending_schedule.set(s, _code);
     }
 }
 
 void fork_store::set_pending_schedule(uint32_t lib_num, const digest_type& hash, const producer_schedule& schedule) {
-    auto s = pending_schedule{lib_num, hash, schedule};
+    auto s = pending_schedule{lib_num, hash, pack(schedule)};
     _pending_schedule.set(s, _code);
 }
 
 incremental_merkle fork_store::get_block_mroot(const block_id_type& block_id) {
     auto by_blockid = _block_states.get_index<N(blockid)>();
-    auto b = by_blockid.get(to_key256(block_id));
-    return b.blockroot_merkle;
+    auto b = by_blockid.get(to_key256(block_id), "by_blockid unable to get");
+    return unpack<incremental_merkle>(b.blockroot_merkle);
 }
 
 checksum256 fork_store::get_action_mroot(const block_id_type& block_id) {
     auto by_blockid = _blocks.get_index<N(blockid)>();
-    auto b = by_blockid.get(to_key256(block_id));
+    auto b = by_blockid.get(to_key256(block_id), "by_blockid unable to get");
 
     auto head = *_block_states.get_index<N(libblocknum)>().begin();
     eosio_assert(b.block_num <= head.last_irreversible_blocknum(), "block number not irreversible");

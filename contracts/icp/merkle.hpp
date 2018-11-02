@@ -236,7 +236,7 @@ public:
         }
     }
 
-    template <typename DataStream>
+    /* template <typename DataStream>
     friend DataStream& operator<<(DataStream& ds, const incremental_merkle& m) {
         return ds << m._node_count << m._active_nodes;
     }
@@ -244,10 +244,12 @@ public:
     template <typename DataStream>
     friend DataStream& operator>>(DataStream& ds, incremental_merkle& m) {
         return ds >> m._node_count >> m._active_nodes;
-    }
+    } */
 
     uint64_t _node_count;
     vector<digest_type> _active_nodes;
+
+    EOSLIB_SERIALIZE(incremental_merkle, (_active_nodes)(_node_count))
 };
 
 using incremental_merkle_ptr = std::shared_ptr<incremental_merkle>;

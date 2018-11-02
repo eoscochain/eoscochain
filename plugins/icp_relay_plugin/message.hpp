@@ -20,17 +20,35 @@ const action_name ACTION_ONPACKET{"onpacket"};
 const action_name ACTION_ONRECEIPT{"onreceipt"};
 const action_name ACTION_ONCLEANUP{"oncleanup"};
 const action_name ACTION_GENPROOF{"genproof"};
+const action_name ACTION_DUMMY{"dummy"};
 const action_name ACTION_CLEANUP{"cleanup"};
 const action_name ACTION_PRUNE{"prune"};
 const action_name ACTION_ISPACKET{"ispacket"};
 const action_name ACTION_ISRECEIPT{"isreceipt"};
 const action_name ACTION_ISCLEANUP{"iscleanup"};
 
+/*
+struct block_header_state : chain::block_header_state {
+   signature_type producer_signature;
+
+   block_header_state() = default;
+   // block_header_state(const chain::block_header_state& b) : chain::block_header_state(b) {}
+   block_header_state(const chain::block_header_state& b, const signature_type& s)
+      : chain::block_header_state(b), producer_signature(s) {}
+   block_header_state(const chain::block_state_ptr& b)
+      : chain::block_header_state(*b), producer_signature(b->block->producer_signature) {}
+};
+*/
+
 struct icp_action {
    bytes action;
    bytes action_receipt;
    block_id_type block_id;
-   vector<digest_type> merkle_path;
+   bytes merkle_path;
+};
+
+struct bytes_data {
+   bytes data;
 };
 
 struct hello {
@@ -81,4 +99,7 @@ FC_REFLECT(icp::pong, (sent)(code))
 FC_REFLECT(icp::channel_seed, (seed))
 FC_REFLECT(icp::block_header_with_merkle_path, (block_header)(merkle_path))
 FC_REFLECT(icp::icp_actions, (block_header)(action_digests)(peer_actions)(actions)(action_receipts))
+
+/*FC_REFLECT_DERIVED(icp::block_header_state, (eosio::chain::block_header_state), (producer_signature))*/
 FC_REFLECT(icp::icp_action, (action)(action_receipt)(block_id)(merkle_path))
+FC_REFLECT(icp::bytes_data, (data))

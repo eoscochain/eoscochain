@@ -194,6 +194,7 @@ void relay::for_each_session(std::function<void (session_ptr)> callback) {
 void relay::send(const icp_message& msg) {
    for_each_session([m=msg](session_ptr s) mutable {
       s->buffer_send(move(m));
+      s->maybe_send_next_message();
    });
 }
 
@@ -201,56 +202,73 @@ void relay::open_channel(const block_header_state& seed) {
    send(channel_seed{seed});
 }
 
+void relay::update_local_head() {
+   // update local head
+   head_ptr h;
+   try_catch([&h, this]() mutable {
+      h = get_read_only_api().get_head();
+   });
+   if (h) {
+      local_head_ = *h;
+      for_each_session([h=*h](session_ptr s) {
+         s->local_head_ = h;
+         s->maybe_send_next_message();
+      });
+   }
+}
+
 void relay::on_applied_transaction(const transaction_trace_ptr& t) {
    vector<action_name> peer_actions;
    vector<action> actions;
    vector<action_receipt> action_receipts;
    for (auto& action: t->action_traces) {
-      if (not (action.act.account == local_contract_ and action.receipt.receiver == action.act.account)) continue;
+      if (action.receipt.receiver != action.act.account) continue;
 
-      if (action.act.name == ACTION_ADDBLOCKS) {
-         app().get_io_service().post([this] {
-            // update local head
-            auto head = get_read_only_api().get_head();
-            if (head) {
-               local_head_ = *head;
-               for_each_session([h=*head](session_ptr s) {
-                  s->local_head_ = h;
-               });
-            }
-         });
-      }
-
-      if (action.act.name == ACTION_SENDACTION) {
+      if (action.act.account != local_contract_ or action.act.name == ACTION_DUMMY) { // thirdparty contract call or icp contract dummy call
          for (auto& in: action.inline_traces) {
-            if (in.act.name == ACTION_ISPACKET) {
-               peer_actions.push_back(ACTION_ONPACKET);
-               actions.push_back(in.act);
-               action_receipts.push_back(in.receipt);
+            if (in.receipt.receiver != in.act.account) continue;
+            if (in.act.account == local_contract_ and in.act.name == ACTION_SENDACTION) {
+               for (auto &inin: in.inline_traces) {
+                  if (inin.receipt.receiver != inin.act.account) continue;
+                  if (inin.act.name == ACTION_ISPACKET) {
+                     peer_actions.push_back(ACTION_ONPACKET);
+                     actions.push_back(inin.act);
+                     action_receipts.push_back(inin.receipt);
+                  }
+               }
             }
          }
-      } else if (action.act.name == ACTION_ONPACKET) {
-         for (auto& in: action.inline_traces) {
-            if (in.act.name == ACTION_ISRECEIPT) {
-               peer_actions.push_back(ACTION_ONRECEIPT);
-               actions.push_back(in.act);
-               action_receipts.push_back(in.receipt);
+      } else if (action.act.account == local_contract_) {
+         if (action.act.name == ACTION_ADDBLOCKS or action.act.name == ACTION_OPENCHANNEL) {
+            app().get_io_service().post([this] {
+               update_local_head();
+            });
+         } else if (action.act.name == ACTION_ONPACKET) {
+            for (auto &in: action.inline_traces) {
+               if (in.receipt.receiver != in.act.account) continue;
+               if (in.act.name == ACTION_ISRECEIPT) {
+                  peer_actions.push_back(ACTION_ONRECEIPT);
+                  actions.push_back(in.act);
+                  action_receipts.push_back(in.receipt);
+               }
             }
-         }
-      } else if (action.act.name == ACTION_GENPROOF) {
-         for (auto& in: action.inline_traces) {
-            if (in.act.name == ACTION_ISPACKET || in.act.name == ACTION_ISRECEIPT) {
-               peer_actions.push_back(in.act.name == ACTION_ISPACKET ? ACTION_ONPACKET : ACTION_ONRECEIPT);
-               actions.push_back(in.act);
-               action_receipts.push_back(in.receipt);
+         } else if (action.act.name == ACTION_GENPROOF) {
+            for (auto &in: action.inline_traces) {
+               if (in.receipt.receiver != in.act.account) continue;
+               if (in.act.name == ACTION_ISPACKET || in.act.name == ACTION_ISRECEIPT) {
+                  peer_actions.push_back(in.act.name == ACTION_ISPACKET ? ACTION_ONPACKET : ACTION_ONRECEIPT);
+                  actions.push_back(in.act);
+                  action_receipts.push_back(in.receipt);
+               }
             }
-         }
-      } else if (action.act.name == ACTION_ONCLEANUP) {
-         for (auto& in: action.inline_traces) {
-            if (in.act.name == ACTION_ISCLEANUP) {
-               peer_actions.push_back(ACTION_ONCLEANUP);
-               actions.push_back(in.act);
-               action_receipts.push_back(in.receipt);
+         } else if (action.act.name == ACTION_ONCLEANUP) {
+            for (auto &in: action.inline_traces) {
+               if (in.receipt.receiver != in.act.account) continue;
+               if (in.act.name == ACTION_ISCLEANUP) {
+                  peer_actions.push_back(ACTION_ONCLEANUP);
+                  actions.push_back(in.act);
+                  action_receipts.push_back(in.receipt);
+               }
             }
          }
       }
@@ -263,14 +281,41 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
    send_transactions_.insert(send_transaction{t->id, t->block_num, peer_actions, actions, action_receipts});
 }
 
-constexpr uint32_t MAX_CACHED_BLOCKS = 1000;
-constexpr uint32_t MIN_CACHED_BLOCKS = 100;
+constexpr uint32_t MAX_CACHED_BLOCKS = 50; // 1000
+constexpr uint32_t MIN_CACHED_BLOCKS = 10; // 100
+
+void relay::clear_cache_block_state() {
+   block_states_.clear();
+   wlog("clear_cache_block_state");
+}
+
+void relay::cache_block_state(block_state_ptr b) {
+   auto& idx = block_states_.get<by_num>();
+   for (auto it = idx.begin(); it != idx.end();) {
+      if (it->block_num + 500 < b->block_num) {
+         it = idx.erase(it);
+      } else {
+         break;
+      }
+   }
+   auto it = idx.find(b->block_num);
+   if (it != idx.end()) {
+      idx.erase(it);
+   }
+
+   block_states_.insert(static_cast<const block_header_state&>(*b));
+   // wlog("cache_block_state");
+}
 
 void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
    bool must_send = false;
    bool may_send = false;
 
    auto& s = b->block_state;
+
+   if (not peer_head_.valid()) {
+      cache_block_state(s);
+   }
 
    // new pending schedule
    if (s->header.new_producers.valid()) {
@@ -279,7 +324,7 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
    }
 
    // new active schedule
-   if (s->active_schedule.version == pending_schedule_version_) {
+   if (s->active_schedule.version > 0 and s->active_schedule.version == pending_schedule_version_) {
       must_send = true;
       pending_schedule_version_ = 0; // reset
    }
@@ -297,7 +342,7 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
       }
    }
 
-   if (not must_send and s->block_num >= peer_head_.head_block_num) {
+   if (not must_send and peer_head_.valid() and s->block_num >= peer_head_.head_block_num) {
       auto lag = s->block_num - peer_head_.head_block_num;
       if ((may_send and lag >= MIN_CACHED_BLOCKS) or lag >= MAX_CACHED_BLOCKS) {
          must_send = true;
@@ -307,11 +352,13 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
    if (must_send) {
       auto& chain = app().get_plugin<chain_plugin>();
       vector<block_id_type> merkle_path;
-      for (uint32_t i = peer_head_.head_block_num + 1; i < s->block_num; ++i) {
+      for (uint32_t i = peer_head_.head_block_num; i < s->block_num; ++i) {
          merkle_path.push_back(chain.chain().get_block_id_for_num(i));
       }
 
       send(block_header_with_merkle_path{*s, merkle_path});
+   } else {
+      update_local_head();
    }
 }
 
@@ -344,14 +391,83 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
 void relay::on_bad_block(const signed_block_ptr& b) {
 }
 
+void print_action( const fc::variant& at ) {
+   const auto& receipt = at["receipt"];
+   auto receiver = receipt["receiver"].as_string();
+   const auto& act = at["act"].get_object();
+   auto code = act["account"].as_string();
+   auto func = act["name"].as_string();
+   auto args = fc::json::to_string( act["data"] );
+   auto console = at["console"].as_string();
+
+   if( args.size() > 100 ) args = args.substr(0,100) + "...";
+   cout << "#" << std::setw(14) << right << receiver << " <= " << std::setw(28) << std::left << (code +"::" + func) << " " << args << "\n";
+   if( console.size() ) {
+      std::stringstream ss(console);
+      string line;
+      std::getline( ss, line );
+      cout << ">> " << line << "\n";
+   }
+}
+
+void print_action_tree( const fc::variant& action ) {
+   print_action( action );
+   const auto& inline_traces = action["inline_traces"].get_array();
+   for( const auto& t : inline_traces ) {
+      print_action_tree( t );
+   }
+}
+
+void print_result(const fc::variant& processed) { try {
+   const auto& transaction_id = processed["id"].as_string();
+   string status = processed["receipt"].is_object() ? processed["receipt"]["status"].as_string() : "failed";
+   int64_t net = -1;
+   int64_t cpu = -1;
+   if( processed.get_object().contains( "receipt" )) {
+      const auto& receipt = processed["receipt"];
+      if( receipt.is_object()) {
+         net = receipt["net_usage_words"].as_int64() * 8;
+         cpu = receipt["cpu_usage_us"].as_int64();
+      }
+   }
+
+   cerr << status << " transaction: " << transaction_id << "  ";
+   if( net < 0 ) {
+      cerr << "<unknown>";
+   } else {
+      cerr << net;
+   }
+   cerr << " bytes  ";
+   if( cpu < 0 ) {
+      cerr << "<unknown>";
+   } else {
+      cerr << cpu;
+   }
+
+   cerr << " us\n";
+
+   if( status == "failed" ) {
+      auto soft_except = processed["except"].as<optional<fc::exception>>();
+      if( soft_except ) {
+         edump((soft_except->to_detail_string()));
+      }
+   } else {
+      const auto& actions = processed["action_traces"].get_array();
+      for( const auto& a : actions ) {
+         print_action_tree( a );
+      }
+      wlog( "\rwarning: transaction executed locally, but may not be confirmed by the network yet" );
+   }
+} FC_CAPTURE_AND_RETHROW( (processed) ) }
+
 void relay::push_transaction(vector<action> actions, packed_transaction::compression_type compression) {
    auto& chain = app().get_plugin<chain_plugin>();
 
    signed_transaction trx;
    trx.actions = std::forward<decltype(actions)>(actions);
    for (auto& a: trx.actions) {
-      a.account = signer_.front().actor;
-      a.authorization = signer_;
+      a.account = local_contract_;
+      if (a.authorization.empty()) a.authorization = signer_;
    }
 
    trx.expiration = chain.chain().head_block_time() + tx_expiration_;
@@ -379,10 +495,11 @@ void relay::push_transaction(vector<action> actions, packed_transaction::compres
    auto rw_api = chain.get_read_write_api();
    rw_api.push_transaction(fc::variant_object(packet_tx), [](const fc::static_variant<fc::exception_ptr, chain_apis::read_write::push_transaction_results>& result) {
       if (result.contains<fc::exception_ptr>()) {
-         result.get<fc::exception_ptr>()->dynamic_rethrow_exception();
+         elog("${e}", ("e", result.get<fc::exception_ptr>()->to_detail_string()));
       } else {
          auto& r = result.get<chain_apis::read_write::push_transaction_results>();
-         wlog("transaction ${id}: ${processed}", ("id", r.transaction_id)("processed", fc::json::to_string(r.processed)));
+         // wlog("transaction ${id}: ${processed}", ("id", r.transaction_id)("processed", fc::json::to_string(p)));
+         print_result(r.processed);
          // TODO
       }
    });

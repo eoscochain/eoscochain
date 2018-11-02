@@ -16,7 +16,7 @@ typedef boost::multi_index_container<block_header_state,
       ordered_unique<tag<by_id>, member<block_header_state, block_id_type, &block_header_state::id>>,
       ordered_non_unique<tag<by_num>, member<block_header_state, uint32_t, &block_header_state::block_num>>
    >
-> block_status_index;
+> block_state_index;
 
 struct send_transaction {
    transaction_id_type id;

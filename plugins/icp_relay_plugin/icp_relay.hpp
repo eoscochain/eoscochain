@@ -48,13 +48,15 @@ public:
 
    void start_reconnect_timer();
 
+   void update_local_head();
+
    void async_add_session(std::weak_ptr<session> s);
    void on_session_close(const session* s);
 
    void for_each_session(std::function<void (session_ptr)> callback);
    void send(const icp_message& msg);
 
-   // void send_icp_transaction();
+   void clear_cache_block_state();
 
    void open_channel(const block_header_state& seed);
    void push_transaction(vector<action> actions, packed_transaction::compression_type compression = packed_transaction::none);
@@ -73,14 +75,15 @@ public:
 
    head peer_head_;
 
+   block_state_index block_states_;
+
 private:
    void on_applied_transaction(const transaction_trace_ptr& t);
    void on_accepted_block(const block_state_with_action_digests_ptr& b);
    void on_irreversible_block(const block_state_ptr& s);
    void on_bad_block(const signed_block_ptr& b);
 
-   // void push_icp_transaction();
-   // void cache_transaction();
+   void cache_block_state(block_state_ptr b);
 
    std::unique_ptr<boost::asio::io_context> ioc_;
    std::vector<std::thread> socket_threads_;

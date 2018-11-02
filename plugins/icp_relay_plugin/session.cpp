@@ -145,6 +145,7 @@ void session::do_hello() {
    hello_msg.contract = relay_->local_contract_;
    hello_msg.peer_contract = relay_->peer_contract_;
    send(hello_msg);
+   sent_remote_hello_ = true;
 }
 
 void session::do_read() {
@@ -196,11 +197,22 @@ bool session::send_ping() {
    auto delta_t = fc::time_point::now() - last_sent_ping_.sent;
    if (delta_t < fc::seconds(3)) return false;
 
+   if (not local_head_.valid()) {
+      app().get_io_service().post(
+         boost::asio::bind_executor(strand_, [this, self = shared_from_this()] {
+            relay_->update_local_head();
+            maybe_send_next_message();
+         })
+      );
+      return false;
+   }
+
    if (last_sent_ping_.code == fc::sha256()) {
       last_sent_ping_.sent = fc::time_point::now();
       last_sent_ping_.code = fc::sha256::hash(last_sent_ping_.sent); /// TODO: make this more random
       last_sent_ping_.head = local_head_;
       send(last_sent_ping_);
+      wlog("send_ping");
    }
    return true;
 }
@@ -257,6 +269,8 @@ void session::maybe_send_next_message() {
    if (send_pong()) return;
    if (send_ping()) return;
 
+   // ilog("msg buffer count: ${n}", ("n", msg_buffer_.size()));
+
    if (not msg_buffer_.empty()) {
       auto msg = msg_buffer_.front();
       send(msg);
@@ -269,13 +283,28 @@ void session::on_message(const icp_message& msg) {
    try {
       switch (msg.which()) {
          case icp_message::tag<hello>::value:
+            wlog("on hello");
             on(msg.get<hello>());
             break;
          case icp_message::tag<ping>::value:
+            wlog("on ping");
             on(msg.get<ping>());
             break;
          case icp_message::tag<pong>::value:
+            wlog("on pong");
             on(msg.get<pong>());
+            break;
+         case icp_message::tag<channel_seed>::value:
+            wlog("on channel_seed");
+            on(msg.get<channel_seed>());
+            break;
+         case icp_message::tag<block_header_with_merkle_path>::value:
+            wlog("on block_header_with_merkle_path");
+            on(msg.get<block_header_with_merkle_path>());
+            break;
+         case icp_message::tag<icp_actions>::value:
+            wlog("on icp_actions");
+            on(msg.get<icp_actions>());
             break;
          default:
             wlog("bad message received");
@@ -304,7 +333,9 @@ void session::check_for_redundant_connection() {
 void session::on(const hello& hi) {
    ilog("received hello: peer id ${id}, peer chain id ${chain_id}, peer icp contract ${contract}, refer to my contract ${peer_contract}", ("id", hi.id)("chain_id", hi.chain_id)("contract", hi.contract)("peer_contract", hi.peer_contract));
 
-   if (hi.chain_id != app().get_plugin<chain_plugin>().get_chain_id()) {
+   recv_remote_hello_ = true;
+
+   if (hi.chain_id != relay_->peer_chain_id_) {
       elog("bad peer: wrong chain id");
       return close();
    }
@@ -323,7 +354,14 @@ void session::on(const ping& p) {
    last_recv_ping_ = p;
    last_recv_ping_time_ = fc::time_point::now();
 
+   wlog("on ping: ${v}", ("v", p.head.valid()));
+
+   if (not p.head.valid()) return;
+
    app().get_io_service().post([=, self=shared_from_this()] {
+      if (not relay_->peer_head_.valid()) {
+         relay_->clear_cache_block_state();
+      }
       relay_->peer_head_ = p.head; // TODO: check validity
    });
 }
@@ -337,11 +375,13 @@ void session::on(const pong& p) {
 }
 
 void session::on(const channel_seed& s) {
-   auto data = fc::raw::pack(s.seed);
+   auto data = fc::raw::pack(bytes_data{fc::raw::pack(s.seed)});
    app().get_io_service().post([=, self=shared_from_this()] {
       action a;
       a.name = ACTION_OPENCHANNEL;
       a.data = data;
+      ilog("data: ${d}", ("d", a.data));
+      a.authorization.push_back(permission_level{relay_->local_contract_, permission_name("active")});
       relay_->push_transaction(vector<action>{a});
    });
 }
@@ -360,13 +400,14 @@ void session::on(const block_header_with_merkle_path& b) {
       first_num = block_header::num_from_id(b.merkle_path.front());
    }
 
-   if (first_num != head->head_block_num + 1) {
+   if (first_num != head->head_block_num) {
       elog("unlinkable block: has ${has}, got ${got}", ("has", head->head_block_num)("got", first_num));
       return;
    }
    // TODO: more check and workaround
 
-   auto data = fc::raw::pack(b);
+
+   auto data = fc::raw::pack(bytes_data{fc::raw::pack(b)});
 
    app().get_io_service().post([=, self=shared_from_this()] {
       action a;
@@ -378,7 +419,7 @@ void session::on(const block_header_with_merkle_path& b) {
 
 void session::on(const icp_actions& ia) {
    auto block_id = ia.block_header.id();
-   auto data = fc::raw::pack(ia.block_header);
+   auto data = fc::raw::pack(bytes_data{fc::raw::pack(ia.block_header)});
 
    app().get_io_service().post([=, self=shared_from_this()] {
       action a;
@@ -391,7 +432,8 @@ void session::on(const icp_actions& ia) {
    for (size_t i = 0; i < ia.peer_actions.size(); ++i) {
       action a;
       a.name = ia.peer_actions[i];
-      a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, ia.action_digests});
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, fc::raw::pack(ia.action_digests)});
+
       app().get_io_service().post([=, self=shared_from_this()] {
          relay_->push_transaction(vector<action>{a});
       });

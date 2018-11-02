@@ -18,14 +18,18 @@ namespace eosio {
       return result;
    }
 
+   digest_type block_header::digest() const {
+      return sha256(*this);
+   }
+
    checksum256 block_header_state::sig_digest() const {
-      auto header_bmroot = sha256(std::make_pair(sha256(header), blockroot_merkle.get_root()));
+      auto header_bmroot = sha256(std::make_pair(header.digest(), blockroot_merkle.get_root()));
       return sha256(std::make_pair(header_bmroot, pending_schedule_hash));
    }
 
    void block_header_state::validate() const {
       auto d = sig_digest();
-      assert_recover_key(&d, (const char*)(producer_signature.data), 66, (const char*)(block_signing_key.data), 34);
+      assert_recover_key(&d, (const char*)(header.producer_signature.data), 66, (const char*)(block_signing_key.data), 34);
 
       eosio_assert(header.id() == id, "invalid block id"); // TODO: necessary?
    }

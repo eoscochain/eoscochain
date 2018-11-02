@@ -25,10 +25,10 @@ using stored_block_header_state_ptr = std::shared_ptr<struct stored_block_header
 struct [[eosio::table]] stored_block_header {
     uint64_t pk;
 
-    block_id_type id;
+    checksum256 id;
     uint32_t block_num;
 
-    block_id_type previous;
+    checksum256 previous;
 
     checksum256 action_mroot = checksum256{};
 
@@ -53,15 +53,15 @@ typedef multi_index<N(block), stored_block_header,
 struct [[eosio::table]] stored_block_header_state {
     uint64_t pk;
 
-    block_id_type id;
+    checksum256 id;
     uint32_t block_num;
 
-    block_id_type previous;
+    checksum256 previous;
 
     uint32_t dpos_irreversible_blocknum;
     uint32_t bft_irreversible_blocknum;
 
-    incremental_merkle blockroot_merkle; // merkle root of block ids
+    bytes blockroot_merkle; // merkle root of block ids
 
     uint32_t last_irreversible_blocknum() {
        return std::max(dpos_irreversible_blocknum, bft_irreversible_blocknum);
@@ -83,12 +83,15 @@ typedef multi_index<N(blockstate), stored_block_header_state,
         indexed_by<N(libblocknum), const_mem_fun<stored_block_header_state, uint128_t, &stored_block_header_state::by_lib_block_num>>
 > stored_block_header_state_table;
 
-typedef singleton<N(activesched), producer_schedule> producer_schedule_singleton;
+struct [[eosio::table]] stored_producer_schedule {
+   bytes producer_schedule;
+};
+typedef singleton<N(activesched), stored_producer_schedule> producer_schedule_singleton;
 
 struct [[eosio::table]] pending_schedule {
-   uint32_t pending_schedule_lib_num;
-   digest_type pending_schedule_hash;
-   producer_schedule pending_schedule;
+   uint32_t pending_schedule_lib_num; // TODO
+   checksum256 pending_schedule_hash; // TODO
+   bytes pending_schedule;
 };
 typedef singleton<N(pendingsched), pending_schedule> pending_schedule_singleton;
 
@@ -118,7 +121,18 @@ private:
     incremental_merkle get_block_mroot(const block_id_type& block_id);
     void validate_block_state(const block_header_state& block_state);
     void add_block_state(const block_header_state& block_state);
-    void add_block_id(const block_id_type& block_id, const block_id_type& previous);
+    template <typename Index>
+    void add_block_id(const Index& by_blockid_index, const block_id_type& block_id, const block_id_type& previous) {
+      eosio_assert(by_blockid_index.find(to_key256(block_id)) == by_blockid_index.end(), "already existing block");
+
+      _blocks.emplace(_code, [&](auto& o) {
+         o.pk = _blocks.available_primary_key();
+         o.id = block_id;
+         o.block_num = block_header::num_from_id(block_id);
+         o.previous = previous;
+         // absent `action_mroot`
+      });
+   }
     void update_active_schedule(const producer_schedule &schedule, bool clear_pending = true);
     void set_pending_schedule(uint32_t lib_num, const digest_type& hash, const producer_schedule& schedule);
     void prune(const stored_block_header_state& block_state);

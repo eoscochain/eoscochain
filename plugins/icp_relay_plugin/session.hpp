@@ -50,6 +50,7 @@ public:
    void do_connect();
    void close();
 
+   void maybe_send_next_message();
    void post(std::function<void()> callback);
 
    void buffer_send(icp_message&& msg);
@@ -71,7 +72,6 @@ private:
    bool send_pong();
    void send();
    void send(const icp_message& msg);
-   void maybe_send_next_message();
    void on_message(const icp_message& msg);
    void check_for_redundant_connection();
 

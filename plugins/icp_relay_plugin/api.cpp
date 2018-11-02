@@ -12,7 +12,19 @@ using namespace eosio;
 
 const string ICP_VERSION = "icp-0.0.1";
 
-std::shared_ptr<head> read_only::get_head() const {
+void try_catch(std::function<void()> exec, const std::string& desc) {
+   try {
+      exec();
+   } catch (fc::exception& e) {
+      elog("FC Exception while ${desc}: ${e}", ("e", e.to_string())("desc", desc));
+   } catch (std::exception& e) {
+      elog("STD Exception while ${desc}: ${e}", ("e", e.what())("desc", desc));
+   } catch (...) {
+      elog("Unknown exception while ${desc}", ("desc", desc));
+   }
+}
+
+head_ptr read_only::get_head() const {
    auto& chain = app().get_plugin<chain_plugin>();
    auto ro_api = chain.get_read_only_api();
 
@@ -106,7 +118,7 @@ read_write::open_channel_results read_write::open_channel(const open_channel_par
    auto& controller = chain.chain();
    auto ro_api = chain.get_read_only_api();
 
-   block_state_ptr b;
+   std::shared_ptr<block_header_state> b;
    optional<uint64_t> block_num;
 
    auto seed_block_num_or_id = params.seed_block_num_or_id;
@@ -120,20 +132,28 @@ read_write::open_channel_results read_write::open_channel(const open_channel_par
 
    if( block_num.valid() ) {
       b = controller.fetch_block_state_by_number(static_cast<uint32_t>(*block_num));
+      if (not b) {
+         auto& idx = relay_->block_states_.get<by_num>();
+         auto it = idx.find(*block_num);
+         if (it != idx.end()) b = std::make_shared<block_header_state>(*it);
+      }
    } else {
       try {
          b = controller.fetch_block_state_by_id(fc::variant(seed_block_num_or_id).as<block_id_type>());
+         if (not b) {
+            auto it = relay_->block_states_.find(fc::variant(seed_block_num_or_id).as<block_id_type>());
+            if (it != relay_->block_states_.end()) b = std::make_shared<block_header_state>(*it);
+         }
       } EOS_RETHROW_EXCEPTIONS(chain::block_id_type_exception, "Invalid block ID: ${block_num_or_id}", ("block_num_or_id", seed_block_num_or_id))
    }
 
    EOS_ASSERT( b, unknown_block_exception, "Could not find reversible block: ${block}", ("block", seed_block_num_or_id));
 
    auto n = block_header::num_from_id(b->id);
-   EOS_ASSERT(n <= controller.head_block_num() - 24, invalid_http_request, "Improper block number: ${n}", ("n", n)); // reduce possibility of block rollback
+   auto head_num = controller.head_block_num();
+   EOS_ASSERT(n + 24 <= head_num and n + 500 >= head_num, invalid_http_request, "Improper block number: ${n}", ("n", n)); // Reduce possibility of block rollback and block state prune. TODO: 24, 500 configurable?
 
-   auto header = static_cast<const block_header_state&>(*b);
-
-   relay_->open_channel(header);
+   relay_->open_channel(*b);
 
    return open_channel_results{};
 }
