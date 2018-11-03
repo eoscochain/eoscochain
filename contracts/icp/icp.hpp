@@ -24,7 +24,7 @@ struct icp : public contract {
     [[eosio::action]]
     void openchannel(const bytes& data); // initialize with a block_header_state as trust seed
     [[eosio::action]]
-    void closechannel();
+    void closechannel(uint8_t clear_all);
 
     [[eosio::action]]
     void addblocks(const bytes& data);
@@ -39,7 +39,7 @@ struct icp : public contract {
     [[eosio::action]]
     void genproof(uint64_t packet_seq, uint64_t receipt_seq); // regenerate a proof of old packet/receipt
     [[eosio::action]]
-    void dummy();
+    void dummy(account_name from);
 
     [[eosio::action]]
     void oncleanup(const icpaction& ia);

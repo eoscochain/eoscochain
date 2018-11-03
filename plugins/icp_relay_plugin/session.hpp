@@ -55,7 +55,8 @@ public:
 
    void buffer_send(icp_message&& msg);
 
-   head local_head_;
+   void update_local_head(const head& h);
+
    string peer_;
 
    int session_id_;
@@ -111,6 +112,8 @@ private:
    fc::time_point last_recv_ping_time_ = fc::time_point::now();
    ping last_recv_ping_;
    ping last_sent_ping_;
+
+   head local_head_;
 };
 
 using session_ptr = std::shared_ptr<session>;

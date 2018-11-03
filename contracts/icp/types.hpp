@@ -174,8 +174,8 @@ struct action_receipt {
     uint64_t global_sequence;
     uint64_t recv_sequence;
     flat_map<account_name, uint64_t> auth_sequence;
-    uint32_t code_sequence;
-    uint32_t abi_sequence;
+    unsigned_int code_sequence;
+    unsigned_int abi_sequence;
 
     digest_type digest() const { return sha256(*this); }
 

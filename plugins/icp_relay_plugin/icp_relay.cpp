@@ -208,16 +208,29 @@ void relay::update_local_head() {
    try_catch([&h, this]() mutable {
       h = get_read_only_api().get_head();
    });
-   if (h) {
+   if (h and (h->head_block_id != local_head_.head_block_id
+              or h->last_irreversible_block_id != local_head_.last_irreversible_block_id)) {
+
       local_head_ = *h;
+
+      for (auto it = recv_transactions_.begin(); it != recv_transactions_.end();) {
+         if (it->block_num > local_head_.last_irreversible_block_num) break;
+
+         auto rt = *it;
+         push_icp_actions(move(rt));
+         it = recv_transactions_.erase(it);
+      }
+
       for_each_session([h=*h](session_ptr s) {
-         s->local_head_ = h;
+         s->update_local_head(h);
          s->maybe_send_next_message();
       });
    }
 }
 
 void relay::on_applied_transaction(const transaction_trace_ptr& t) {
+   if (send_transactions_.find(t->id) != send_transactions_.end()) return; // has been handled
+
    vector<action_name> peer_actions;
    vector<action> actions;
    vector<action_receipt> action_receipts;
@@ -231,6 +244,7 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
                for (auto &inin: in.inline_traces) {
                   if (inin.receipt.receiver != inin.act.account) continue;
                   if (inin.act.name == ACTION_ISPACKET) {
+                     // wlog("ispacket: ${a}, ${n}", ("a", inin.act.account)("n", inin.act.name));
                      peer_actions.push_back(ACTION_ONPACKET);
                      actions.push_back(inin.act);
                      action_receipts.push_back(inin.receipt);
@@ -276,13 +290,8 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
 
    if (peer_actions.empty()) return;
 
-   auto it = send_transactions_.find(t->id);
-   if (it == send_transactions_.end()) return; // TODO
    send_transactions_.insert(send_transaction{t->id, t->block_num, peer_actions, actions, action_receipts});
 }
-
-constexpr uint32_t MAX_CACHED_BLOCKS = 50; // 1000
-constexpr uint32_t MIN_CACHED_BLOCKS = 10; // 100
 
 void relay::clear_cache_block_state() {
    block_states_.clear();
@@ -369,12 +378,34 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
       if (it != send_transactions_.end()) txs.push_back(*it);
    }
 
-   if (txs.empty()) return;
-   
+   if (txs.empty()) {
+      if (fc::time_point::now() - last_transaction_time_ >= fc::seconds(DUMMY_ICP_SECONDS) and peer_head_.valid()) {
+         app().get_io_service().post([=] {
+            action a;
+            a.name = ACTION_DUMMY;
+            a.data = fc::raw::pack(dummy{signer_[0].actor});
+            push_transaction(vector<action>{a});
+         });
+      }
+      return;
+   }
+
+   last_transaction_time_ = fc::time_point::now();
+
    auto bit = block_with_action_digests_.find(s->id);
    if (bit == block_with_action_digests_.end()) {
       elog("cannot find block action digests: block id ${id}", ("id", s->id));
       return;
+   }
+
+   if (s->block_num > peer_head_.head_block_num) {
+      auto& chain = app().get_plugin<chain_plugin>();
+      vector<block_id_type> merkle_path;
+      for (uint32_t i = peer_head_.head_block_num; i < s->block_num; ++i) {
+         merkle_path.push_back(chain.chain().get_block_id_for_num(i));
+      }
+
+      send(block_header_with_merkle_path{*s, merkle_path});
    }
 
    icp_actions ia;
@@ -389,6 +420,28 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
 }
 
 void relay::on_bad_block(const signed_block_ptr& b) {
+}
+
+void relay::handle_icp_actions(recv_transaction&& rt) {
+   if (local_head_.last_irreversible_block_num < rt.block_num) {
+      recv_transactions_.insert(move(rt)); // cache it, push later
+      return;
+   }
+
+   push_icp_actions(move(rt));
+}
+
+void relay::push_icp_actions(recv_transaction&& rt) {
+   app().get_io_service().post([=] {
+      if (not rt.action_add_block.account.empty()) {
+         push_transaction(vector<action>{rt.action_add_block});
+      }
+      // TODO: rate limiting, cache, and retry
+      for (auto& a: rt.action_icp) {
+         wlog("action_icp: ${a}, ${n}", ("a", a.name)("n", a.data.size()));
+         push_transaction(vector<action>{a});
+      }
+   });
 }
 
 void print_action( const fc::variant& at ) {
@@ -460,14 +513,16 @@ void print_result(const fc::variant& processed) { try {
    }
 } FC_CAPTURE_AND_RETHROW( (processed) ) }
 
-void relay::push_transaction(vector<action> actions, packed_transaction::compression_type compression) {
+void relay::push_transaction(vector<action> actions, function<void(bool)> callback, packed_transaction::compression_type compression) {
    auto& chain = app().get_plugin<chain_plugin>();
 
    signed_transaction trx;
    trx.actions = std::forward<decltype(actions)>(actions);
+   vector<action_name> action_names;
    for (auto& a: trx.actions) {
       a.account = local_contract_;
       if (a.authorization.empty()) a.authorization = signer_;
+      action_names.push_back(a.name);
    }
 
    trx.expiration = chain.chain().head_block_time() + tx_expiration_;
@@ -493,13 +548,16 @@ void relay::push_transaction(vector<action> actions, packed_transaction::compres
 
    auto packet_tx = fc::mutable_variant_object(packed_transaction(trx, compression));
    auto rw_api = chain.get_read_write_api();
-   rw_api.push_transaction(fc::variant_object(packet_tx), [](const fc::static_variant<fc::exception_ptr, chain_apis::read_write::push_transaction_results>& result) {
+   rw_api.push_transaction(fc::variant_object(packet_tx), [action_names, callback](const fc::static_variant<fc::exception_ptr, chain_apis::read_write::push_transaction_results>& result) {
       if (result.contains<fc::exception_ptr>()) {
+         wlog("actions: ${a}", ("a", action_names));
          elog("${e}", ("e", result.get<fc::exception_ptr>()->to_detail_string()));
+         if (callback) callback(false);
       } else {
          auto& r = result.get<chain_apis::read_write::push_transaction_results>();
          // wlog("transaction ${id}: ${processed}", ("id", r.transaction_id)("processed", fc::json::to_string(p)));
          print_result(r.processed);
+         if (callback) callback(true);
          // TODO
       }
    });

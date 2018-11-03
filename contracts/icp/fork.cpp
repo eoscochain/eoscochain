@@ -57,7 +57,7 @@ void fork_store::init_seed_block(const block_header_state& block_state) {
     add_block_state(block_state);
 }
 
-void fork_store::reset() {
+void fork_store::reset(uint8_t clear_all) {
     for (auto it = _block_states.begin(); it != _block_states.end();) {
         it = _block_states.erase(it);
     }
@@ -67,6 +67,10 @@ void fork_store::reset() {
     _active_schedule.remove();
     _pending_schedule.remove();
     meter_remove_blocks();
+
+    if (clear_all) {
+        _store_meter.remove();
+    }
 }
 
 void fork_store::add_block_header_with_merkle_path(const block_header_state& h, const vector<block_id_type>& merkle_path) {

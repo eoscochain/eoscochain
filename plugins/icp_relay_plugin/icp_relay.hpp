@@ -59,7 +59,8 @@ public:
    void clear_cache_block_state();
 
    void open_channel(const block_header_state& seed);
-   void push_transaction(vector<action> actions, packed_transaction::compression_type compression = packed_transaction::none);
+   void push_transaction(vector<action> actions, function<void(bool)> callback = nullptr, packed_transaction::compression_type compression = packed_transaction::none);
+   void handle_icp_actions(recv_transaction&& rt);
 
    std::string endpoint_address_;
    std::uint16_t endpoint_port_;
@@ -85,6 +86,8 @@ private:
 
    void cache_block_state(block_state_ptr b);
 
+   void push_icp_actions(recv_transaction&& rt);
+
    std::unique_ptr<boost::asio::io_context> ioc_;
    std::vector<std::thread> socket_threads_;
    std::shared_ptr<listener> listener_;
@@ -101,8 +104,10 @@ private:
    uint32_t tx_max_net_usage_ = 0;
    uint32_t delaysec_ = 0;
 
+   fc::time_point last_transaction_time_ = fc::time_point::now();
    send_transaction_index send_transactions_;
    block_with_action_digests_index block_with_action_digests_;
+   recv_transaction_index recv_transactions_;
    uint32_t pending_schedule_version_ = 0;
 
    head local_head_;

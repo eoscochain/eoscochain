@@ -68,6 +68,7 @@ void icp_relay_api_plugin::plugin_startup() {
 
    _http_plugin.add_api({
       ICP_RELAY_RO_CALL(get_info, 200),
+      ICP_RELAY_RO_CALL(get_block, 200),
       ICP_RELAY_RW_CALL(open_channel, 200)
    });
 }

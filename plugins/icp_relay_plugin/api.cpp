@@ -49,12 +49,36 @@ head_ptr read_only::get_head() const {
    p.table = "block";
    p.key_type = "i64";
    p.index_position = "4"; // blocknum
+   p.lower_bound = std::to_string(h->last_irreversible_block_num);
+   p.limit = 1;
    auto blocks = ro_api.get_table_rows(p); // TODO: is this right?
-   if (not blocks.rows.empty()) {
+   if (not blocks.rows.empty() and blocks.rows.front()["block_num"].as_uint64() == h->last_irreversible_block_num) {
       h->last_irreversible_block_id = block_id_type(blocks.rows.front()["id"].as_string());
    }
 
    return h;
+}
+
+read_only::get_block_results read_only::get_block(const get_block_params& params) {
+   auto& chain = app().get_plugin<chain_plugin>();
+   auto ro_api = chain.get_read_only_api();
+
+   chain_apis::read_only::get_table_rows_params p;
+   p.json = true;
+   p.code = relay_->local_contract_;
+   p.scope = relay_->local_contract_.to_string();
+   p.table = "block";
+   p.key_type = "sha256";
+   p.encode_type = "hex";
+   p.index_position = "2";
+   p.lower_bound = params.id.str();
+   p.limit = 1;
+   auto blocks = ro_api.get_table_rows(p);
+   if (not blocks.rows.empty() and blocks.rows.front()["id"].as<block_id_type>() == params.id) {
+      return get_block_results{blocks.rows.front()};
+   } else {
+      return get_block_results{};
+   };
 }
 
 read_only::get_info_results read_only::get_info(const get_info_params&) const {

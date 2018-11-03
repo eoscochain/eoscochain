@@ -108,7 +108,7 @@ public:
     fork_store(account_name code);
 
     void init_seed_block(const block_header_state& block_state);
-    void reset();
+    void reset(uint8_t clear_all);
     void set_max_blocks(uint32_t max);
     void add_block_header_with_merkle_path(const block_header_state& h, const vector<block_id_type>& merkle_path);
     void add_block_header(const block_header& h);

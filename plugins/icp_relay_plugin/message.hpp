@@ -51,6 +51,10 @@ struct bytes_data {
    bytes data;
 };
 
+struct dummy {
+   account_name from;
+};
+
 struct hello {
    public_key_type id; // sender id
    chain_id_type chain_id; // sender chain id
@@ -103,3 +107,4 @@ FC_REFLECT(icp::icp_actions, (block_header)(action_digests)(peer_actions)(action
 /*FC_REFLECT_DERIVED(icp::block_header_state, (eosio::chain::block_header_state), (producer_signature))*/
 FC_REFLECT(icp::icp_action, (action)(action_receipt)(block_id)(merkle_path))
 FC_REFLECT(icp::bytes_data, (data))
+FC_REFLECT(icp::dummy, (from))

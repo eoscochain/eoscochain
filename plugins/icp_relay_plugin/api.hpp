@@ -36,6 +36,14 @@ public:
 
    head_ptr get_head() const;
 
+   struct get_block_params {
+      block_id_type id;
+   };
+   struct get_block_results {
+      fc::variant block;
+   };
+   get_block_results get_block(const get_block_params&);
+
    using get_info_params = empty;
    struct get_info_results {
       string icp_version;
@@ -85,6 +93,8 @@ private:
 
 FC_REFLECT(icp::empty, )
 FC_REFLECT(icp::head, (head_block_num)(head_block_id)(last_irreversible_block_num)(last_irreversible_block_id))
+FC_REFLECT(icp::read_only::get_block_params, (id))
+FC_REFLECT(icp::read_only::get_block_results, (block))
 FC_REFLECT(icp::read_only::get_info_results, (icp_version)(local_chain_id)(peer_chain_id)(local_contract)(peer_contract)
                                              (head_block_num)(head_block_id)(last_irreversible_block_num)(last_irreversible_block_id)
                                              (max_blocks)(current_blocks)(last_outgoing_packet_seq)(last_incoming_packet_seq)

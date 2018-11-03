@@ -279,6 +279,10 @@ void session::maybe_send_next_message() {
    // TODO
 }
 
+void session::update_local_head(const head& h) {
+   local_head_ = h;
+}
+
 void session::on_message(const icp_message& msg) {
    try {
       switch (msg.which()) {
@@ -400,12 +404,13 @@ void session::on(const block_header_with_merkle_path& b) {
       first_num = block_header::num_from_id(b.merkle_path.front());
    }
 
+   wlog("block_header_with_merkle_path: ${n1} -> ${n2}, head: ${h}", ("n1", first_num)("n2", b.block_header.block_num)("h", head->head_block_num));
+
    if (first_num != head->head_block_num) {
-      elog("unlinkable block: has ${has}, got ${got}", ("has", head->head_block_num)("got", first_num));
+      // elog("unlinkable block: has ${has}, got ${got}", ("has", head->head_block_num)("got", first_num));
       return;
    }
    // TODO: more check and workaround
-
 
    auto data = fc::raw::pack(bytes_data{fc::raw::pack(b)});
 
@@ -419,25 +424,30 @@ void session::on(const block_header_with_merkle_path& b) {
 
 void session::on(const icp_actions& ia) {
    auto block_id = ia.block_header.id();
-   auto data = fc::raw::pack(bytes_data{fc::raw::pack(ia.block_header)});
+   auto block_num = ia.block_header.block_num();
+   wlog("icp_actions: ${num}, ${id}", ("num", ia.block_header.block_num())("id", block_id));
+   recv_transaction rt{block_num, block_id};
 
-   app().get_io_service().post([=, self=shared_from_this()] {
+   auto ro = relay_->get_read_only_api();
+   auto r = ro.get_block(read_only::get_block_params{block_id});
+   if (r.block.is_null()) { // not exist
+      auto data = fc::raw::pack(bytes_data{fc::raw::pack(ia.block_header)});
       action a;
       a.name = ACTION_ADDBLOCK;
       a.data = data;
-      relay_->push_transaction(vector<action>{a}); // TODO: check block existing
-   });
+      rt.action_add_block = a;
+   }
 
-   // TODO: rate limiting, cache, and retry
    for (size_t i = 0; i < ia.peer_actions.size(); ++i) {
       action a;
       a.name = ia.peer_actions[i];
       a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, fc::raw::pack(ia.action_digests)});
-
-      app().get_io_service().post([=, self=shared_from_this()] {
-         relay_->push_transaction(vector<action>{a});
-      });
+      rt.action_icp.push_back(a);
    }
+
+   app().get_io_service().post([=, self=shared_from_this()]() mutable {
+      relay_->handle_icp_actions(move(rt));
+   });
 }
 
 }

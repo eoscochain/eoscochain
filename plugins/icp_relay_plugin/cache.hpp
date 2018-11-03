@@ -7,6 +7,11 @@ namespace icp {
 using namespace eosio;
 using namespace eosio::chain;
 
+// TODO: configurable
+constexpr uint32_t MAX_CACHED_BLOCKS = 50; // 1000
+constexpr uint32_t MIN_CACHED_BLOCKS = 10; // 100
+constexpr uint32_t DUMMY_ICP_SECONDS = 10; // 3600
+
 struct by_id;
 struct by_num;
 struct by_block_num;
@@ -44,5 +49,18 @@ typedef boost::multi_index_container<block_with_action_digests,
       ordered_unique<tag<by_id>, member<block_with_action_digests, block_id_type, &block_with_action_digests::id>>
    >
 > block_with_action_digests_index;
+
+struct recv_transaction {
+   uint32_t block_num;
+   block_id_type block_id;
+   action action_add_block;
+   vector<action> action_icp;
+};
+
+typedef boost::multi_index_container<recv_transaction,
+   indexed_by<
+      ordered_non_unique<tag<by_block_num>, member<recv_transaction, uint32_t, &recv_transaction::block_num>>
+   >
+> recv_transaction_index;
 
 }

@@ -19,9 +19,8 @@ icp::icp(account_name self)
     peer_singleton peer(_self, _self);
     _peer = peer.get_or_default(peer_contract{});
 
-
     if (!meter_singleton(_self, _self).exists()) {
-        setmaxpackes(5000 * 60 * 60 * 24); // default unfinished packets max 24 hour at 5000TPS
+        meter_singleton(_self, _self).set(icp_meter{5000 * 60 * 60 * 24, 0}, _self); // default unfinished packets max 24 hour at 5000TPS
     }
 }
 
@@ -53,14 +52,27 @@ void icp::openchannel(const bytes &data) {
     _store->init_seed_block(h);
 }
 
-void icp::closechannel() {
+void icp::closechannel(uint8_t clear_all) {
     require_auth(_self);
 
     packet_table packets(_self, _self);
     receipt_table receipts(_self, _self);
+
+    if (clear_all) { // dangerous!
+        for (auto it = packets.begin(); it != packets.end();) {
+            it = packets.erase(it);
+        }
+        for (auto it = receipts.begin(); it != receipts.end();) {
+            it = receipts.erase(it);
+        }
+        peer_singleton(_self, _self).remove();
+        meter_singleton(_self, _self).remove();
+    }
+
     eosio_assert(packets.begin() == packets.end(), "remain packets");
     eosio_assert(receipts.begin() == receipts.end(), "remain receipts");
-    _store->reset();
+
+    _store->reset(clear_all);
 }
 
 void icp::addblocks(const bytes& data) {
@@ -96,7 +108,7 @@ void icp::sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration
    });
 
    // action `ispacket` does not exist, so nothing will happen locally
-   action(vector<permission_level>{}, _self, N(ispacket), packet).send_context_free();
+   action(vector<permission_level>{}, _self, N(ispacket), packet).send();
 }
 
 void icp::maybe_cutdown(const checksum256& id, incoming_type type) {
@@ -163,7 +175,7 @@ void icp::onpacket(const icpaction& ia) {
         receipts.emplace(_self, [&](auto& r) {
            r = receipt;
         });
-        action(vector<permission_level>{}, _self, N(isreceipt), receipt).send_context_free();
+        action(vector<permission_level>{}, _self, N(isreceipt), receipt).send();
 
         return;
     }
@@ -180,7 +192,7 @@ void icp::onpacket(const icpaction& ia) {
     receipts.emplace(_self, [&](auto& r) {
        r = receipt;
     });
-    action(vector<permission_level>{}, _self, N(isreceipt), receipt).send_context_free();
+    action(vector<permission_level>{}, _self, N(isreceipt), receipt).send();
 }
 
 void icp::onreceipt(const icpaction& ia) {
@@ -281,7 +293,7 @@ void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
 
     meter_remove_packets(num);
 
-    action(vector<permission_level>{}, _self, N(iscleanup), erased_range).send_context_free();
+    action(vector<permission_level>{}, _self, N(iscleanup), erased_range).send();
 }
 
 void icp::prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq) {
@@ -298,24 +310,26 @@ void icp::genproof(uint64_t packet_seq, uint64_t receipt_seq) { // TODO: rate li
         packet_table packets(_self, _self);
         auto packet = packets.get(packet_seq, "unable find icp_packet sequence");
         packet.shadow = true;
-        action(vector<permission_level>{}, _self, N(ispacket), packet).send_context_free();
+        action(vector<permission_level>{}, _self, N(ispacket), packet).send();
     }
 
     if (receipt_seq > 0) {
         receipt_table receipts(_self, _self);
         auto receipt = receipts.get(receipt_seq, "unable find icp_receipt sequence");
         receipt.shadow = true;
-        action(vector<permission_level>{}, _self, N(isreceipt), receipt).send_context_free();
+        action(vector<permission_level>{}, _self, N(isreceipt), receipt).send();
     }
 }
 
-void icp::dummy() {
+void icp::dummy(account_name from) {
+    require_auth(from);
+    // TODO: auth
     auto seq = next_packet_seq();
     // auto icp_send = action(vector<permission_level>{}, _peer.peer, 0, bytes{});
     auto send_action = bytes{};
     auto receive_action = bytes{};
     // set expiration to 0
-    INLINE_ACTION_SENDER(eosio::icp, sendaction)(_self, {_self, N(eosio.code)}, {seq, send_action, 0, receive_action});
+    INLINE_ACTION_SENDER(eosio::icp, sendaction)(_self, {_self, N(sendaction)}, {seq, send_action, 0, receive_action});
 }
 
 uint64_t icp::next_packet_seq() const {
@@ -348,4 +362,4 @@ void icp::meter_remove_packets(uint32_t num) {
 }
 
 EOSIO_ABI(eosio::icp, (setpeer)(setmaxpackes)(setmaxblocks)(openchannel)(closechannel)
-                      (addblocks)(addblock)(onpacket)(onreceipt)(oncleanup)(cleanup)(sendaction)(genproof)(prune))
+                      (addblocks)(addblock)(onpacket)(onreceipt)(oncleanup)(cleanup)(sendaction)(genproof)(dummy)(prune))
