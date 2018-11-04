@@ -135,12 +135,9 @@ bytes icp::extract_action(const icpaction& ia) {
     eosio_assert(mroot == action_mroot, "invalid actions merkle root");
 
     auto receipt = unpack<action_receipt>(ia.action_receipt);
-    auto receipt_digest = receipt.digest();
-
-    auto action_digest = sha256(ia.action);
-    eosio_assert(action_digest == receipt.act_digest, "invalid action digest");
 
     bool exists = false;
+    auto receipt_digest = receipt.digest();
     for (const auto &d: merkle_path) {
         if (d == receipt_digest) {
             exists = true;
@@ -150,8 +147,10 @@ bytes icp::extract_action(const icpaction& ia) {
     eosio_assert(exists, "invalid action receipt digest");
 
     auto a = unpack<action>(ia.action);
+    auto action_digest = sha256(a);
+    eosio_assert(action_digest == receipt.act_digest, "invalid action digest");
     eosio_assert(a.account == _peer.peer, "invalid peer icp contract");
-    eosio_assert(a.name == N(null), "invalid peer icp contract action");
+    eosio_assert(a.name == N(ispacket) or a.name == N(isreceipt) or a.name == N(iscleanup), "invalid peer icp contract action");
     return a.data;
 }
 

@@ -302,6 +302,7 @@ incremental_merkle fork_store::get_block_mroot(const block_id_type& block_id) {
 checksum256 fork_store::get_action_mroot(const block_id_type& block_id) {
     auto by_blockid = _blocks.get_index<N(blockid)>();
     auto b = by_blockid.get(to_key256(block_id), "by_blockid unable to get");
+    eosio_assert(b.has_action_mroot(), "incomplete block");
 
     auto head = *_block_states.get_index<N(libblocknum)>().begin();
     eosio_assert(b.block_num <= head.last_irreversible_blocknum(), "block number not irreversible");

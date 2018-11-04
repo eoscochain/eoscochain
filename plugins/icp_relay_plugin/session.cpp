@@ -425,7 +425,6 @@ void session::on(const block_header_with_merkle_path& b) {
 void session::on(const icp_actions& ia) {
    auto block_id = ia.block_header.id();
    auto block_num = ia.block_header.block_num();
-   wlog("icp_actions: ${num}, ${id}", ("num", ia.block_header.block_num())("id", block_id));
    recv_transaction rt{block_num, block_id};
 
    auto ro = relay_->get_read_only_api();
@@ -442,6 +441,7 @@ void session::on(const icp_actions& ia) {
       action a;
       a.name = ia.peer_actions[i];
       a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, fc::raw::pack(ia.action_digests)});
+      wlog("icp_actions: ${num}, ${ad}, ${rd}", ("num", block_num)("ad", digest_type::hash(ia.actions[i]))("rd", ia.action_receipts[i].act_digest));
       rt.action_icp.push_back(a);
    }
 

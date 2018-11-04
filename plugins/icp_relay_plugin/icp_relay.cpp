@@ -433,12 +433,12 @@ void relay::handle_icp_actions(recv_transaction&& rt) {
 
 void relay::push_icp_actions(recv_transaction&& rt) {
    app().get_io_service().post([=] {
-      if (not rt.action_add_block.account.empty()) {
+      if (not rt.action_add_block.name.empty()) {
          push_transaction(vector<action>{rt.action_add_block});
       }
       // TODO: rate limiting, cache, and retry
       for (auto& a: rt.action_icp) {
-         wlog("action_icp: ${a}, ${n}", ("a", a.name)("n", a.data.size()));
+         wlog("action_icp: action ${a}, block num ${n}, is add ${t}", ("a", a.name)("n", rt.block_num)("t", not rt.action_add_block.name.empty()));
          push_transaction(vector<action>{a});
       }
    });
