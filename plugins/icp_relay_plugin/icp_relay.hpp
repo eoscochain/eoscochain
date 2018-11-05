@@ -48,7 +48,7 @@ public:
 
    void start_reconnect_timer();
 
-   void update_local_head();
+   void update_local_head(bool force = false);
 
    void async_add_session(std::weak_ptr<session> s);
    void on_session_close(const session* s);
@@ -88,6 +88,8 @@ private:
 
    void push_icp_actions(recv_transaction&& rt);
 
+   void cleanup_sequences();
+
    std::unique_ptr<boost::asio::io_context> ioc_;
    std::vector<std::thread> socket_threads_;
    std::shared_ptr<listener> listener_;
@@ -105,6 +107,9 @@ private:
    uint32_t delaysec_ = 0;
 
    fc::time_point last_transaction_time_ = fc::time_point::now();
+
+   uint32_t cumulative_cleanup_sequences_ = 0;
+
    send_transaction_index send_transactions_;
    block_with_action_digests_index block_with_action_digests_;
    recv_transaction_index recv_transactions_;

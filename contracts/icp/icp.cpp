@@ -52,27 +52,31 @@ void icp::openchannel(const bytes &data) {
     _store->init_seed_block(h);
 }
 
-void icp::closechannel(uint8_t clear_all) {
+void icp::closechannel(uint8_t clear_all, uint32_t max_num) {
     require_auth(_self);
+
+    if (max_num == 0) max_num = std::numeric_limits<uint32_t>::max();
 
     packet_table packets(_self, _self);
     receipt_table receipts(_self, _self);
 
     if (clear_all) { // dangerous!
         for (auto it = packets.begin(); it != packets.end();) {
+            if (max_num <= 0) break; --max_num;
             it = packets.erase(it);
         }
         for (auto it = receipts.begin(); it != receipts.end();) {
+            if (max_num <= 0) break; --max_num;
             it = receipts.erase(it);
         }
         peer_singleton(_self, _self).remove();
         meter_singleton(_self, _self).remove();
     }
 
-    eosio_assert(packets.begin() == packets.end(), "remain packets");
-    eosio_assert(receipts.begin() == receipts.end(), "remain receipts");
+    eosio_assert(max_num <= 0 or packets.begin() == packets.end(), "remain packets");
+    eosio_assert(max_num <= 0 or receipts.begin() == receipts.end(), "remain receipts");
 
-    _store->reset(clear_all);
+    _store->reset(clear_all, max_num);
 }
 
 void icp::addblocks(const bytes& data) {
@@ -121,7 +125,7 @@ void icp::maybe_cutdown(const checksum256& id, incoming_type type) {
    }
    auto new_max = _peer.max_finished_block_num();
    if (new_max > old_max) {
-       _store->cutdown(new_max);
+       _store->cutdown(new_max); // TODO: limit the max cutdown number
    }
 }
 
@@ -168,7 +172,7 @@ void icp::onpacket(const icpaction& ia) {
     receipt_table receipts(_self, _self);
 
     if (packet.expiration <= now()) {
-        print_f("icp action has expired: % <= now %", uint64_t(packet.expiration), uint64_t(now));
+        print_f("icp action has expired: % <= now %", uint64_t(packet.expiration), uint64_t(now()));
 
         icp_receipt receipt{_peer.last_outgoing_receipt_seq, packet.seq, static_cast<uint8_t>(receipt_status::expired), {}};
         receipts.emplace(_self, [&](auto& r) {
@@ -195,13 +199,17 @@ void icp::onpacket(const icpaction& ia) {
 }
 
 void icp::onreceipt(const icpaction& ia) {
+    print(" a ");
     auto action_data = extract_action(ia);
+    print(" b ");
     maybe_cutdown(ia.block_id, incoming_type::receipt);
 
+    print(" c ");
     auto receipt = unpack<icp_receipt>(action_data);
     eosio_assert(receipt.seq == _peer.last_incoming_receipt_seq + 1, "invalid receipt sequence");
 
     ++_peer.last_incoming_receipt_seq;
+    print(" d ");
     update_peer();
 
     // receipt_table receipts(_self, _self);
@@ -216,15 +224,19 @@ void icp::onreceipt(const icpaction& ia) {
     }); */
 
     packet_table packets(_self, _self);
-    auto packet = packets.get(receipt.pseq, "unable find the receipt's icp_packet sequence");
+    auto it = packets.find(receipt.pseq);
+    eosio_assert(it != packets.end(), "unable find the receipt's icp_packet sequence");
+    auto& packet = *it;
     eosio_assert(static_cast<receipt_status>(packet.status) == receipt_status::unknown, "packet received receipt");
 
     auto status = static_cast<receipt_status>(receipt.status);
     eosio_assert(status == receipt_status::executed || status == receipt_status::expired, "invalid receipt status");
 
+    print(" e ");
     packets.modify(packet, 0, [&](auto& p) {
         p.status = receipt.status;
     });
+    print(" f ");
 
     if (not packet.receipt_action.empty()) {
         // this action call **cannot** fail, otherwise the icp will not proceed any more

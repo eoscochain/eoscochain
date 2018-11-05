@@ -1,9 +1,7 @@
 #include "icp_relay.hpp"
 
-#include <eosio/producer_plugin/producer_plugin.hpp>
-#include <fc/io/json.hpp>
-
 #include "api.hpp"
+#include "message.hpp"
 
 namespace icp {
 
@@ -146,6 +144,7 @@ void relay::start_reconnect_timer() {
          for (const auto& s: sessions_ ) {
             auto ses = s.second.lock();
             if( ses && (ses->peer_ == peer) ) {
+               // wlog("use count: ${s}, ${ss}", ("s", s.second.use_count())("ss", ses.use_count()));
                found = true;
                break;
             }
@@ -202,19 +201,35 @@ void relay::open_channel(const block_header_state& seed) {
    send(channel_seed{seed});
 }
 
-void relay::update_local_head() {
+void relay::update_local_head(bool force) {
    // update local head
    head_ptr h;
-   try_catch([&h, this]() mutable {
+   sequence_ptr s;
+   try_catch([&h, &s, this]() mutable {
       h = get_read_only_api().get_head();
+      s = get_read_only_api().get_sequence();
    });
-   if (h and (h->head_block_id != local_head_.head_block_id
-              or h->last_irreversible_block_id != local_head_.last_irreversible_block_id)) {
+   // wlog("head: ${h}, ${hh}", ("h", bool(h))("hh", h ? *h : head{}));
+   if (h and s and (force or h->head_block_id != local_head_.head_block_id
+                     or h->last_irreversible_block_id != local_head_.last_irreversible_block_id)) { // local head changed
 
       local_head_ = *h;
+      // wlog("head: ${h}", ("h", local_head_));
+
+      std::unordered_set<packet_receipt_request> req_set; // deduplicate
 
       for (auto it = recv_transactions_.begin(); it != recv_transactions_.end();) {
          if (it->block_num > local_head_.last_irreversible_block_num) break;
+
+         auto req = s->make_genproof_request(it->start_packet_seq, it->start_receipt_seq);
+         if (not req.empty()) {
+            if (not req_set.count(req)) {
+               send(req);
+               req_set.insert(req);
+            }
+            ++it;
+            continue;
+         }
 
          auto rt = *it;
          push_icp_actions(move(rt));
@@ -222,15 +237,18 @@ void relay::update_local_head() {
       }
 
       for_each_session([h=*h](session_ptr s) {
-         s->update_local_head(h);
-         s->maybe_send_next_message();
+         // wlog("has session");
+         s->update_local_head(h); // TODO: ?
       });
+      send(head_notice{local_head_});
    }
 }
 
 void relay::on_applied_transaction(const transaction_trace_ptr& t) {
    if (send_transactions_.find(t->id) != send_transactions_.end()) return; // has been handled
 
+   uint64_t start_packet_seq = 0;
+   uint64_t start_receipt_seq = 0;
    vector<action_name> peer_actions;
    vector<action> actions;
    vector<action_receipt> action_receipts;
@@ -248,6 +266,7 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
                      peer_actions.push_back(ACTION_ONPACKET);
                      actions.push_back(inin.act);
                      action_receipts.push_back(inin.receipt);
+                     icp_packet::get_seq(inin.act.data, start_packet_seq);
                   }
                }
             }
@@ -264,6 +283,7 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
                   peer_actions.push_back(ACTION_ONRECEIPT);
                   actions.push_back(in.act);
                   action_receipts.push_back(in.receipt);
+                  icp_receipt::get_seq(in.act.data, start_receipt_seq);
                }
             }
          } else if (action.act.name == ACTION_GENPROOF) {
@@ -273,6 +293,8 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
                   peer_actions.push_back(in.act.name == ACTION_ISPACKET ? ACTION_ONPACKET : ACTION_ONRECEIPT);
                   actions.push_back(in.act);
                   action_receipts.push_back(in.receipt);
+                  if (in.act.name == ACTION_ISPACKET) icp_packet::get_seq(in.act.data, start_packet_seq);
+                  else icp_receipt::get_seq(in.act.data, start_receipt_seq);
                }
             }
          } else if (action.act.name == ACTION_ONCLEANUP) {
@@ -284,13 +306,15 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
                   action_receipts.push_back(in.receipt);
                }
             }
+         } else if (action.act.name == ACTION_ONRECEIPT) {
+            cleanup_sequences();
          }
       }
    }
 
    if (peer_actions.empty()) return;
 
-   send_transactions_.insert(send_transaction{t->id, t->block_num, peer_actions, actions, action_receipts});
+   send_transactions_.insert(send_transaction{t->id, t->block_num, start_packet_seq, start_receipt_seq, peer_actions, actions, action_receipts});
 }
 
 void relay::clear_cache_block_state() {
@@ -367,7 +391,9 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
 
       send(block_header_with_merkle_path{*s, merkle_path});
    } else {
-      update_local_head();
+      for_each_session([](session_ptr s) mutable {
+         s->maybe_send_next_message();
+      });
    }
 }
 
@@ -386,6 +412,7 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
             a.data = fc::raw::pack(dummy{signer_[0].actor});
             push_transaction(vector<action>{a});
          });
+         last_transaction_time_ = fc::time_point::now();
       }
       return;
    }
@@ -415,6 +442,7 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
       ia.peer_actions.insert(ia.peer_actions.end(), t.peer_actions.cbegin(), t.peer_actions.cend());
       ia.actions.insert(ia.actions.end(), t.actions.cbegin(), t.actions.cend());
       ia.action_receipts.insert(ia.action_receipts.end(), t.action_receipts.cbegin(), t.action_receipts.cend());
+      ia.set_seq(t.start_packet_seq, t.start_receipt_seq);
    }
    send(ia);
 }
@@ -428,6 +456,18 @@ void relay::handle_icp_actions(recv_transaction&& rt) {
       return;
    }
 
+   auto s = get_read_only_api().get_sequence();
+   if (s) {
+      auto req = s->make_genproof_request(rt.start_packet_seq, rt.start_receipt_seq);
+      if (not req.empty()) {
+         send(req);
+         recv_transactions_.insert(move(rt)); // cache it, push later
+         return;
+      }
+   } else {
+      elog("got empty sequence");
+   }
+
    push_icp_actions(move(rt));
 }
 
@@ -438,129 +478,32 @@ void relay::push_icp_actions(recv_transaction&& rt) {
       }
       // TODO: rate limiting, cache, and retry
       for (auto& a: rt.action_icp) {
-         wlog("action_icp: action ${a}, block num ${n}, is add ${t}", ("a", a.name)("n", rt.block_num)("t", not rt.action_add_block.name.empty()));
+         // wlog("action_icp: action ${a}, block num ${n}, is add ${t}", ("a", a.name)("n", rt.block_num)("t", not rt.action_add_block.name.empty()));
          push_transaction(vector<action>{a});
       }
    });
 }
 
-void print_action( const fc::variant& at ) {
-   const auto& receipt = at["receipt"];
-   auto receiver = receipt["receiver"].as_string();
-   const auto& act = at["act"].get_object();
-   auto code = act["account"].as_string();
-   auto func = act["name"].as_string();
-   auto args = fc::json::to_string( act["data"] );
-   auto console = at["console"].as_string();
+void relay::cleanup_sequences() {
+   ++cumulative_cleanup_sequences_;
+   if (cumulative_cleanup_sequences_ < MAX_CLEANUP_SEQUENCES) return;
 
-   if( args.size() > 100 ) args = args.substr(0,100) + "...";
-   cout << "#" << std::setw(14) << right << receiver << " <= " << std::setw(28) << std::left << (code +"::" + func) << " " << args << "\n";
-   if( console.size() ) {
-      std::stringstream ss(console);
-      string line;
-      std::getline( ss, line );
-      cout << ">> " << line << "\n";
-   }
-}
-
-void print_action_tree( const fc::variant& action ) {
-   print_action( action );
-   const auto& inline_traces = action["inline_traces"].get_array();
-   for( const auto& t : inline_traces ) {
-      print_action_tree( t );
-   }
-}
-
-void print_result(const fc::variant& processed) { try {
-   const auto& transaction_id = processed["id"].as_string();
-   string status = processed["receipt"].is_object() ? processed["receipt"]["status"].as_string() : "failed";
-   int64_t net = -1;
-   int64_t cpu = -1;
-   if( processed.get_object().contains( "receipt" )) {
-      const auto& receipt = processed["receipt"];
-      if( receipt.is_object()) {
-         net = receipt["net_usage_words"].as_int64() * 8;
-         cpu = receipt["cpu_usage_us"].as_int64();
-      }
+   auto s = get_read_only_api().get_sequence(true);
+   if (not s) {
+      elog("got empty sequence");
+      return;
    }
 
-   cerr << status << " transaction: " << transaction_id << "  ";
-   if( net < 0 ) {
-      cerr << "<unknown>";
-   } else {
-      cerr << net;
+   if (s->min_packet_seq > 0 and s->last_incoming_receipt_seq - s->min_packet_seq >= MAX_CLEANUP_SEQUENCES) { // TODO: consistent receipt and packet sequence?
+      app().get_io_service().post([=] {
+         action a;
+         a.name = ACTION_CLEANUP;
+         a.data = fc::raw::pack(cleanup{s->min_packet_seq, s->last_incoming_receipt_seq});
+         wlog("cleanup: ${s} -> ${e}", ("s", s->min_packet_seq)("e", s->last_incoming_receipt_seq));
+         push_transaction(vector<action>{a});
+      });
    }
-   cerr << " bytes  ";
-   if( cpu < 0 ) {
-      cerr << "<unknown>";
-   } else {
-      cerr << cpu;
-   }
-
-   cerr << " us\n";
-
-   if( status == "failed" ) {
-      auto soft_except = processed["except"].as<optional<fc::exception>>();
-      if( soft_except ) {
-         edump((soft_except->to_detail_string()));
-      }
-   } else {
-      const auto& actions = processed["action_traces"].get_array();
-      for( const auto& a : actions ) {
-         print_action_tree( a );
-      }
-      wlog( "\rwarning: transaction executed locally, but may not be confirmed by the network yet" );
-   }
-} FC_CAPTURE_AND_RETHROW( (processed) ) }
-
-void relay::push_transaction(vector<action> actions, function<void(bool)> callback, packed_transaction::compression_type compression) {
-   auto& chain = app().get_plugin<chain_plugin>();
-
-   signed_transaction trx;
-   trx.actions = std::forward<decltype(actions)>(actions);
-   vector<action_name> action_names;
-   for (auto& a: trx.actions) {
-      a.account = local_contract_;
-      if (a.authorization.empty()) a.authorization = signer_;
-      action_names.push_back(a.name);
-   }
-
-   trx.expiration = chain.chain().head_block_time() + tx_expiration_;
-   trx.set_reference_block(chain.chain().last_irreversible_block_id());
-   trx.max_cpu_usage_ms = tx_max_cpu_usage_;
-   trx.max_net_usage_words = (tx_max_net_usage_ + 7)/8;
-   trx.delay_sec = delaysec_;
-
-   auto pp = app().find_plugin<producer_plugin>();
-   FC_ASSERT(pp and pp->get_state() == abstract_plugin::started, "producer_plugin not found");
-
-   if (signer_required_keys_.empty()) {
-      auto available_keys = pp->get_producer_keys();
-      auto ro_api = chain.get_read_only_api();
-      fc::variant v{static_cast<const transaction&>(trx)};
-      signer_required_keys_ = ro_api.get_required_keys(chain_apis::read_only::get_required_keys_params{v, available_keys}).required_keys;
-   }
-
-   auto digest = trx.sig_digest(chain.get_chain_id(), trx.context_free_data);
-   for (auto& k: signer_required_keys_) {
-      trx.signatures.push_back(pp->sign_compact(k, digest));
-   }
-
-   auto packet_tx = fc::mutable_variant_object(packed_transaction(trx, compression));
-   auto rw_api = chain.get_read_write_api();
-   rw_api.push_transaction(fc::variant_object(packet_tx), [action_names, callback](const fc::static_variant<fc::exception_ptr, chain_apis::read_write::push_transaction_results>& result) {
-      if (result.contains<fc::exception_ptr>()) {
-         wlog("actions: ${a}", ("a", action_names));
-         elog("${e}", ("e", result.get<fc::exception_ptr>()->to_detail_string()));
-         if (callback) callback(false);
-      } else {
-         auto& r = result.get<chain_apis::read_write::push_transaction_results>();
-         // wlog("transaction ${id}: ${processed}", ("id", r.transaction_id)("processed", fc::json::to_string(p)));
-         print_result(r.processed);
-         if (callback) callback(true);
-         // TODO
-      }
-   });
+   cumulative_cleanup_sequences_ = 0;
 }
 
 }

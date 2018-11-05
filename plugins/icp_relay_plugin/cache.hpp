@@ -11,6 +11,7 @@ using namespace eosio::chain;
 constexpr uint32_t MAX_CACHED_BLOCKS = 50; // 1000
 constexpr uint32_t MIN_CACHED_BLOCKS = 10; // 100
 constexpr uint32_t DUMMY_ICP_SECONDS = 10; // 3600
+constexpr uint32_t MAX_CLEANUP_SEQUENCES = 10;
 
 struct by_id;
 struct by_num;
@@ -26,6 +27,9 @@ typedef boost::multi_index_container<block_header_state,
 struct send_transaction {
    transaction_id_type id;
    uint32_t block_num = 0;
+
+   uint64_t start_packet_seq = 0;
+   uint64_t start_receipt_seq = 0;
 
    vector<action_name> peer_actions;
    vector<action> actions;
@@ -53,6 +57,10 @@ typedef boost::multi_index_container<block_with_action_digests,
 struct recv_transaction {
    uint32_t block_num;
    block_id_type block_id;
+
+   uint64_t start_packet_seq;
+   uint64_t start_receipt_seq;
+
    action action_add_block;
    vector<action> action_icp;
 };

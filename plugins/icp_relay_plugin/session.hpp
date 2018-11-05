@@ -80,8 +80,10 @@ private:
    void on(const ping& p);
    void on(const pong& p);
    void on(const channel_seed& s);
+   void on(const head_notice& h);
    void on(const block_header_with_merkle_path& b);
    void on(const icp_actions& ia);
+   void on(const packet_receipt_request& req);
 
    enum session_state {
       hello_state,

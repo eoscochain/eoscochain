@@ -24,6 +24,17 @@ void try_catch(std::function<void()> exec, const std::string& desc) {
    }
 }
 
+packet_receipt_request sequence::make_genproof_request(uint64_t start_packet_seq, uint64_t start_receipt_seq) {
+   packet_receipt_request req;
+   if (last_incoming_packet_seq + 1 < start_packet_seq) {
+      req.packet_seq = last_incoming_packet_seq + 1; // request the previous one
+   }
+   if (last_incoming_receipt_seq + 1 < start_receipt_seq) {
+      req.receipt_seq = last_incoming_receipt_seq + 1; // request the previous one
+   }
+   return req;
+}
+
 head_ptr read_only::get_head() const {
    auto& chain = app().get_plugin<chain_plugin>();
    auto ro_api = chain.get_read_only_api();
@@ -57,6 +68,45 @@ head_ptr read_only::get_head() const {
    }
 
    return h;
+}
+
+sequence_ptr read_only::get_sequence(bool includes_min) const {
+   auto& chain = app().get_plugin<chain_plugin>();
+   auto ro_api = chain.get_read_only_api();
+
+   chain_apis::read_only::get_table_rows_params p;
+   p.json = true;
+   p.code = relay_->local_contract_;
+   p.scope = relay_->local_contract_.to_string();
+   p.table = "peer";
+   p.limit = 1;
+   p.key_type = "";
+   p.index_position = "";
+   auto peer = ro_api.get_table_rows(p);
+   if (peer.rows.empty()) return nullptr;
+
+   auto s = std::make_shared<sequence>();
+
+   auto& row = peer.rows.front();
+   s->last_outgoing_packet_seq = row["last_outgoing_packet_seq"].as_uint64();
+   s->last_incoming_packet_seq = row["last_incoming_packet_seq"].as_uint64();
+   s->last_outgoing_receipt_seq = row["last_outgoing_receipt_seq"].as_uint64();
+   s->last_incoming_receipt_seq = row["last_incoming_receipt_seq"].as_uint64();
+
+   if (includes_min) {
+      p.table = "packets";
+      auto packets = ro_api.get_table_rows(p);
+      if (not packets.rows.empty()) {
+         s->min_packet_seq = row["seq"].as_uint64();
+      }
+      p.table = "receipts";
+      auto receipts = ro_api.get_table_rows(p);
+      if (not receipts.rows.empty()) {
+         s->min_receipt_seq = row["seq"].as_uint64();
+      }
+   }
+
+   return s;
 }
 
 read_only::get_block_results read_only::get_block(const get_block_params& params) {
@@ -116,20 +166,18 @@ read_only::get_info_results read_only::get_info(const get_info_params&) const {
       info.current_blocks = static_cast<uint32_t>(row["current_blocks"].as_uint64());
    }
 
-   p.table = "peer";
-   auto peer = ro_api.get_table_rows(p);
-   if (not peer.rows.empty()) {
-      auto& row = peer.rows.front();
-      info.last_outgoing_packet_seq = row["last_outgoing_packet_seq"].as_uint64();
-      info.last_incoming_packet_seq = row["last_incoming_packet_seq"].as_uint64();
-      info.last_outgoing_receipt_seq = row["last_outgoing_receipt_seq"].as_uint64();
-      info.last_incoming_receipt_seq = row["last_incoming_receipt_seq"].as_uint64();
+   auto s = get_sequence();
+   if (s) {
+      info.last_outgoing_packet_seq = s->last_outgoing_packet_seq;
+      info.last_incoming_packet_seq = s->last_incoming_packet_seq;
+      info.last_outgoing_receipt_seq = s->last_outgoing_receipt_seq;
+      info.last_incoming_receipt_seq = s->last_incoming_receipt_seq;
    }
 
    p.table = "icpmeter";
    auto icpmeter = ro_api.get_table_rows(p);
    if (not icpmeter.rows.empty()) {
-      auto &row = peer.rows.front();
+      auto &row = icpmeter.rows.front();
       info.max_packets = static_cast<uint32_t>(row["max_packets"].as_uint64());
       info.current_packets = static_cast<uint32_t>(row["current_packets"].as_uint64());
    }

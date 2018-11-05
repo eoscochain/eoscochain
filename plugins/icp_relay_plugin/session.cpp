@@ -198,12 +198,14 @@ bool session::send_ping() {
    if (delta_t < fc::seconds(3)) return false;
 
    if (not local_head_.valid()) {
+      // wlog("local head: ${h}", ("h", local_head_));
       app().get_io_service().post(
          boost::asio::bind_executor(strand_, [this, self = shared_from_this()] {
-            relay_->update_local_head();
+            relay_->update_local_head(true);
             maybe_send_next_message();
          })
       );
+      last_sent_ping_.sent = fc::time_point::now();
       return false;
    }
 
@@ -212,7 +214,7 @@ bool session::send_ping() {
       last_sent_ping_.code = fc::sha256::hash(last_sent_ping_.sent); /// TODO: make this more random
       last_sent_ping_.head = local_head_;
       send(last_sent_ping_);
-      wlog("send_ping");
+      // wlog("send_ping");
    }
    return true;
 }
@@ -302,6 +304,10 @@ void session::on_message(const icp_message& msg) {
             wlog("on channel_seed");
             on(msg.get<channel_seed>());
             break;
+         case icp_message::tag<head_notice>::value:
+            wlog("on head_notice");
+            on(msg.get<head_notice>());
+            break;
          case icp_message::tag<block_header_with_merkle_path>::value:
             wlog("on block_header_with_merkle_path");
             on(msg.get<block_header_with_merkle_path>());
@@ -309,6 +315,10 @@ void session::on_message(const icp_message& msg) {
          case icp_message::tag<icp_actions>::value:
             wlog("on icp_actions");
             on(msg.get<icp_actions>());
+            break;
+         case icp_message::tag<packet_receipt_request>::value:
+            wlog("on packet_receipt_request");
+            on(msg.get<packet_receipt_request>());
             break;
          default:
             wlog("bad message received");
@@ -335,7 +345,7 @@ void session::check_for_redundant_connection() {
 }
 
 void session::on(const hello& hi) {
-   ilog("received hello: peer id ${id}, peer chain id ${chain_id}, peer icp contract ${contract}, refer to my contract ${peer_contract}", ("id", hi.id)("chain_id", hi.chain_id)("contract", hi.contract)("peer_contract", hi.peer_contract));
+   // ilog("received hello: peer id ${id}, peer chain id ${chain_id}, peer icp contract ${contract}, refer to my contract ${peer_contract}", ("id", hi.id)("chain_id", hi.chain_id)("contract", hi.contract)("peer_contract", hi.peer_contract));
 
    recv_remote_hello_ = true;
 
@@ -358,7 +368,7 @@ void session::on(const ping& p) {
    last_recv_ping_ = p;
    last_recv_ping_time_ = fc::time_point::now();
 
-   wlog("on ping: ${v}", ("v", p.head.valid()));
+   // wlog("on ping: ${v}", ("v", p.head.valid()));
 
    if (not p.head.valid()) return;
 
@@ -384,9 +394,21 @@ void session::on(const channel_seed& s) {
       action a;
       a.name = ACTION_OPENCHANNEL;
       a.data = data;
-      ilog("data: ${d}", ("d", a.data));
+      // ilog("data: ${d}", ("d", a.data));
       a.authorization.push_back(permission_level{relay_->local_contract_, permission_name("active")});
       relay_->push_transaction(vector<action>{a});
+   });
+}
+
+void session::on(const head_notice& h) {
+   // wlog("recv head: ${v}", ("v", h.head.valid()));
+   if (not h.head.valid()) return;
+
+   app().get_io_service().post([=, self=shared_from_this()] {
+      if (not relay_->peer_head_.valid()) {
+         relay_->clear_cache_block_state();
+      }
+      relay_->peer_head_ = h.head; // TODO: check validity
    });
 }
 
@@ -404,7 +426,7 @@ void session::on(const block_header_with_merkle_path& b) {
       first_num = block_header::num_from_id(b.merkle_path.front());
    }
 
-   wlog("block_header_with_merkle_path: ${n1} -> ${n2}, head: ${h}", ("n1", first_num)("n2", b.block_header.block_num)("h", head->head_block_num));
+   // wlog("block_header_with_merkle_path: ${n1} -> ${n2}, head: ${h}", ("n1", first_num)("n2", b.block_header.block_num)("h", head->head_block_num));
 
    if (first_num != head->head_block_num) {
       // elog("unlinkable block: has ${has}, got ${got}", ("has", head->head_block_num)("got", first_num));
@@ -418,14 +440,16 @@ void session::on(const block_header_with_merkle_path& b) {
       action a;
       a.name = ACTION_ADDBLOCKS;
       a.data = data;
-      relay_->push_transaction(vector<action>{a});
+      relay_->push_transaction(vector<action>{a}, [this, self](bool success) {
+         if (success) relay_->update_local_head();
+      });
    });
 }
 
 void session::on(const icp_actions& ia) {
    auto block_id = ia.block_header.id();
    auto block_num = ia.block_header.block_num();
-   recv_transaction rt{block_num, block_id};
+   recv_transaction rt{block_num, block_id, ia.start_packet_seq, ia.start_receipt_seq};
 
    auto ro = relay_->get_read_only_api();
    auto r = ro.get_block(read_only::get_block_params{block_id});
@@ -441,12 +465,23 @@ void session::on(const icp_actions& ia) {
       action a;
       a.name = ia.peer_actions[i];
       a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, fc::raw::pack(ia.action_digests)});
-      wlog("icp_actions: ${num}, ${ad}, ${rd}", ("num", block_num)("ad", digest_type::hash(ia.actions[i]))("rd", ia.action_receipts[i].act_digest));
+      // wlog("icp_actions: ${num}, ${ad}, ${rd}", ("num", block_num)("ad", digest_type::hash(ia.actions[i]))("rd", ia.action_receipts[i].act_digest));
       rt.action_icp.push_back(a);
    }
 
    app().get_io_service().post([=, self=shared_from_this()]() mutable {
       relay_->handle_icp_actions(move(rt));
+   });
+}
+
+void session::on(const packet_receipt_request& req) {
+   // TOOD: pre-check
+
+   app().get_io_service().post([=, self=shared_from_this()] {
+      action a;
+      a.name = ACTION_GENPROOF;
+      a.data = fc::raw::pack(req);
+      relay_->push_transaction(vector<action>{a});
    });
 }
 

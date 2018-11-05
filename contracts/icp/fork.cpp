@@ -57,11 +57,13 @@ void fork_store::init_seed_block(const block_header_state& block_state) {
     add_block_state(block_state);
 }
 
-void fork_store::reset(uint8_t clear_all) {
+void fork_store::reset(uint8_t clear_all, uint32_t max_num) {
     for (auto it = _block_states.begin(); it != _block_states.end();) {
+        if (max_num <= 0) break; --max_num;
         it = _block_states.erase(it);
     }
     for (auto it = _blocks.begin(); it != _blocks.end();) {
+        if (max_num <= 0) break; --max_num;
         it = _blocks.erase(it);
     }
     _active_schedule.remove();

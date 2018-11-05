@@ -30,11 +30,29 @@ struct head {
 
 using head_ptr = std::shared_ptr<head>;
 
+struct packet_receipt_request;
+
+struct sequence {
+   uint64_t last_outgoing_packet_seq = 0;
+   uint64_t last_incoming_packet_seq = 0;
+   uint64_t last_outgoing_receipt_seq = 0;
+   uint64_t last_incoming_receipt_seq = 0;
+
+   uint64_t min_packet_seq = 0;
+   uint64_t min_receipt_seq = 0;
+
+   packet_receipt_request make_genproof_request(uint64_t start_packet_seq, uint64_t start_receipt_seq);
+};
+
+using sequence_ptr = std::shared_ptr<sequence>;
+
 class read_only {
 public:
    explicit read_only(relay_ptr relay) : relay_(std::move(relay)) {}
 
    head_ptr get_head() const;
+
+   sequence_ptr get_sequence(bool includes_min = false) const;
 
    struct get_block_params {
       block_id_type id;
