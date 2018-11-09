@@ -92,17 +92,31 @@ sequence_ptr read_only::get_sequence(bool includes_min) const {
    s->last_incoming_packet_seq = row["last_incoming_packet_seq"].as_uint64();
    s->last_outgoing_receipt_seq = row["last_outgoing_receipt_seq"].as_uint64();
    s->last_incoming_receipt_seq = row["last_incoming_receipt_seq"].as_uint64();
+   s->last_finalised_outgoing_receipt_seq = row["last_finalised_outgoing_receipt_seq"].as_uint64();
+   s->last_incoming_packet_block_num = row["last_incoming_packet_block_num"].as_uint64();
+   s->last_incoming_receipt_block_num = row["last_incoming_receipt_block_num"].as_uint64();
+   s->last_incoming_receiptend_block_num = row["last_incoming_receiptend_block_num"].as_uint64();
 
    if (includes_min) {
       p.table = "packets";
       auto packets = ro_api.get_table_rows(p);
       if (not packets.rows.empty()) {
+         auto& row = packets.rows.front();
          s->min_packet_seq = row["seq"].as_uint64();
       }
       p.table = "receipts";
       auto receipts = ro_api.get_table_rows(p);
       if (not receipts.rows.empty()) {
+         auto& row = receipts.rows.front();
          s->min_receipt_seq = row["seq"].as_uint64();
+      }
+      p.table = "block";
+      p.key_type = "i64";
+      p.index_position = "4"; // blocknum
+      auto blocks = ro_api.get_table_rows(p);
+      if (not blocks.rows.empty()) {
+         auto& row = blocks.rows.front();
+         s->min_block_num = row["block_num"].as_uint64();
       }
    }
 

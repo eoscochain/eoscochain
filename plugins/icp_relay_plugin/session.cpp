@@ -461,12 +461,25 @@ void session::on(const icp_actions& ia) {
       rt.action_add_block = a;
    }
 
-   for (size_t i = 0; i < ia.peer_actions.size(); ++i) {
+   for (auto& p: ia.packet_actions) {
+      auto& s = p.second;
       action a;
-      a.name = ia.peer_actions[i];
-      a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, fc::raw::pack(ia.action_digests)});
-      // wlog("icp_actions: ${num}, ${ad}, ${rd}", ("num", block_num)("ad", digest_type::hash(ia.actions[i]))("rd", ia.action_receipts[i].act_digest));
-      rt.action_icp.push_back(a);
+      a.name = s.peer_action;
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action), fc::raw::pack(s.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      rt.packet_actions.emplace_back(p.first, a);
+   }
+   for (auto& r: ia.receipt_actions) {
+      auto& s = r.second;
+      action a;
+      a.name = s.peer_action;
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action), fc::raw::pack(s.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      rt.receipt_actions.emplace_back(r.first, a);
+   }
+   for (auto& c: ia.receiptend_actions) {
+      action a;
+      a.name = c.peer_action;
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(c.action), fc::raw::pack(c.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      rt.receiptend_actions.emplace_back(a);
    }
 
    app().get_io_service().post([=, self=shared_from_this()]() mutable {

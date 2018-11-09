@@ -86,9 +86,10 @@ private:
 
    void cache_block_state(block_state_ptr b);
 
-   void push_icp_actions(recv_transaction&& rt);
+   void push_icp_actions(const sequence_ptr& s, recv_transaction&& rt);
 
-   void cleanup_sequences();
+   void cleanup();
+   // void cleanup_sequences();
 
    std::unique_ptr<boost::asio::io_context> ioc_;
    std::vector<std::thread> socket_threads_;
@@ -108,7 +109,8 @@ private:
 
    fc::time_point last_transaction_time_ = fc::time_point::now();
 
-   uint32_t cumulative_cleanup_sequences_ = 0;
+   // uint32_t cumulative_cleanup_sequences_ = 0;
+   uint32_t cumulative_cleanup_count_ = 0;
 
    send_transaction_index send_transactions_;
    block_with_action_digests_index block_with_action_digests_;

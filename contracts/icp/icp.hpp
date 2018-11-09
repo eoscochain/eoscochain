@@ -37,25 +37,32 @@ struct icp : public contract {
     [[eosio::action]]
     void onreceipt(const icpaction& ia);
     [[eosio::action]]
-    void genproof(uint64_t packet_seq, uint64_t receipt_seq); // regenerate a proof of old packet/receipt
+    void onreceiptend(const icpaction& ia);
+    [[eosio::action]]
+    void genproof(uint64_t packet_seq, uint64_t receipt_seq, uint8_t finalised_receipt); // regenerate a proof of old packet/receipt
     [[eosio::action]]
     void dummy(account_name from);
+    [[eosio::action]]
+    void cleanup(uint32_t max_num);
 
-    [[eosio::action]]
-    void oncleanup(const icpaction& ia);
-    [[eosio::action]]
-    void cleanup(uint64_t start_seq, uint64_t end_seq);
-    [[eosio::action]]
-    void prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq); // prune oldest receipts that will not be used any more
+   /*
+   [[eosio::action]]
+   void oncleanup(const icpaction& ia);
+   [[eosio::action]]
+   void cleanup(uint64_t start_seq, uint64_t end_seq);
+   [[eosio::action]]
+   void prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq); // prune oldest receipts that will not be used any more
+   */
 
     uint64_t next_packet_seq() const;
 
 private:
-    bytes extract_action(const icpaction& ia);
+    bytes extract_action(const icpaction& ia, const action_name& name);
     void update_peer();
 
     enum class incoming_type : uint8_t {
-       packet, receipt, cleanup
+       // packet, receipt, cleanup
+       packet, receipt, receiptend
     };
 
     void maybe_cutdown(const checksum256& id, incoming_type type);
@@ -71,12 +78,16 @@ private:
         uint64_t last_outgoing_receipt_seq = 0;
         uint64_t last_incoming_receipt_seq = 0; // to validate
 
+        uint64_t last_finalised_outgoing_receipt_seq = 0;
+
         uint32_t last_incoming_packet_block_num = 0;
         uint32_t last_incoming_receipt_block_num = 0;
-        uint32_t last_incoming_cleanup_block_num = 0;
+        // uint32_t last_incoming_cleanup_block_num = 0;
+        uint32_t last_incoming_receiptend_block_num = 0;
 
         uint32_t max_finished_block_num() const {
-            return std::min({last_incoming_packet_block_num, last_incoming_receipt_block_num, last_incoming_cleanup_block_num});
+            // return std::min({last_incoming_packet_block_num, last_incoming_receipt_block_num, last_incoming_cleanup_block_num});
+            return std::min({last_incoming_packet_block_num, last_incoming_receipt_block_num, last_incoming_receiptend_block_num});
         }
     };
 
