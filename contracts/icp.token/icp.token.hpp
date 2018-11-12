@@ -3,7 +3,6 @@
 #include <eosiolib/asset.hpp>
 #include <eosiolib/eosio.hpp>
 #include <eosiolib/singleton.hpp>
-#include <icp/icp.hpp>
 
 namespace icp {
 
@@ -14,12 +13,14 @@ namespace icp {
    public:
       token(account_name self);
 
+      [[eosio::action]]
       void setcontracts(account_name icp, account_name peer);
 
       // APIs for token asset transferred from peer chain
-      void create(account_name contract, symbol_name symbol);
+      [[eosio::action]]
+      void create(account_name contract, string symbol);
+      [[eosio::action]]
       void transfer(account_name contract, account_name from, account_name to, asset quantity, string memo);
-
 
       /** Receive asset transfer from peer contract.
        *
@@ -28,7 +29,8 @@ namespace icp {
        * @param quantity
        * @param memo
        */
-      void icpreceive(account_name contract, account_name icp_from, account_name to, asset quantity, string memo, bool refund);
+      [[eosio::action]]
+      void icpreceive(account_name contract, account_name icp_from, account_name to, asset quantity, string memo, uint8_t refund);
 
       /**
        *
@@ -36,7 +38,8 @@ namespace icp {
        * @param status
        * @param data
        */
-      void icpreceipt(uint64_t seq, receipt_status status, bytes data);
+      [[eosio::action]]
+      void icpreceipt(uint64_t seq, uint8_t status, bytes data);
 
       /** Applied when other token contract `transfer` to this contract.
        * The memo will be parsed for distinguish between transfer or deposit.
@@ -56,8 +59,10 @@ namespace icp {
        * @param memo
        * @param expiration
        */
+      [[eosio::action]]
       void icptransfer(account_name contract, account_name from, account_name icp_to, asset quantity, string memo, uint32_t expiration);
 
+      [[eosio::action]]
       void icprefund(account_name contract, account_name from, account_name icp_to, asset quantity, string memo, uint32_t expiration);
 
    private:
@@ -77,7 +82,7 @@ namespace icp {
        * @param icp - the base icp contract on local chain
        * @param peer - the icp.token contract on peer chain
        */
-      struct collaborative_contract {
+      struct [[eosio::table]] collaborative_contract {
          account_name icp = 0;
          account_name peer = 0;
       };
@@ -87,7 +92,7 @@ namespace icp {
        * @param account - the owner
        * @param balance - the asset balance
        */
-      struct account {
+      struct [[eosio::table]] account {
          uint64_t pk;
          account_name account;
          asset    balance;
@@ -100,7 +105,7 @@ namespace icp {
        * @param scope - the token contract from peer chain
        * @param supply - the asset stats
        */
-      struct account_stats {
+      struct [[eosio::table]] account_stats {
          asset supply;
 
          uint64_t primary_key()const { return supply.symbol.name(); }
@@ -111,7 +116,7 @@ namespace icp {
        * @param account - the owner
        * @param balance - the transferred asset
        */
-      struct account_deposit {
+      struct [[eosio::table]] account_deposit {
          uint64_t pk;
          account_name account;
          asset balance;
@@ -129,12 +134,12 @@ namespace icp {
        * @param account - the sender
        * @param balance - the transferred asset
        */
-      struct account_locked {
+      struct [[eosio::table]] account_locked {
          uint64_t seq;
          account_name contract;
          account_name account;
          asset balance;
-         bool refund;
+         uint8_t refund;
 
          uint64_t primary_key()const { return seq; }
       };
