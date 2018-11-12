@@ -5,6 +5,7 @@
 #pragma once
 
 #include <eosiolib/singleton.hpp>
+#include <eosiolib/icp.hpp>
 
 #include "types.hpp"
 #include "fork.hpp"
@@ -70,33 +71,11 @@ private:
     void meter_add_packets(uint32_t num);
     void meter_remove_packets(uint32_t num = std::numeric_limits<uint32_t>::max());
 
-    struct [[eosio::table]] peer_contract {
-        account_name peer = 0;
-
-        uint64_t last_outgoing_packet_seq = 0;
-        uint64_t last_incoming_packet_seq = 0; // to validate
-        uint64_t last_outgoing_receipt_seq = 0;
-        uint64_t last_incoming_receipt_seq = 0; // to validate
-
-        uint64_t last_finalised_outgoing_receipt_seq = 0;
-
-        uint32_t last_incoming_packet_block_num = 0;
-        uint32_t last_incoming_receipt_block_num = 0;
-        // uint32_t last_incoming_cleanup_block_num = 0;
-        uint32_t last_incoming_receiptend_block_num = 0;
-
-        uint32_t max_finished_block_num() const {
-            // return std::min({last_incoming_packet_block_num, last_incoming_receipt_block_num, last_incoming_cleanup_block_num});
-            return std::min({last_incoming_packet_block_num, last_incoming_receipt_block_num, last_incoming_receiptend_block_num});
-        }
-    };
-
     struct [[eosio::table]] icp_meter {
         uint32_t max_packets;
         uint32_t current_packets;
     };
 
-    typedef eosio::singleton<N(peer), peer_contract> peer_singleton;
     typedef eosio::singleton<N(icpmeter), icp_meter> meter_singleton;
 
     peer_contract _peer;

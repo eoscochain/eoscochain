@@ -317,8 +317,7 @@ void icp::dummy(account_name from) {
 }
 
 uint64_t icp::next_packet_seq() const {
-   eosio_assert(_peer.peer, "empty peer icp contract");
-   return _peer.last_outgoing_packet_seq + 1;
+   return eosio::next_packet_seq(_self);
 }
 
 void icp::update_peer() {

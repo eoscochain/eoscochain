@@ -4,6 +4,7 @@
 #include <eosiolib/time.hpp>
 #include <eosiolib/optional.hpp>
 #include <eosiolib/producer_schedule.hpp>
+#include <eosiolib/icp.hpp>
 
 #include "merkle.hpp"
 
@@ -192,13 +193,6 @@ struct [[eosio::action]] icpaction {
 
    // explicit serialization macro is not necessary, used here only to improve compilation time
    EOSLIB_SERIALIZE(icpaction, (action)(action_receipt)(block_id)(merkle_path))
-};
-
-enum class receipt_status : uint8_t {
-  unknown = 0,
-  executed = 1,
-  expired = 2
-  // failed = 3
 };
 
 struct [[eosio::table]] icp_packet {
