@@ -60,7 +60,6 @@ namespace icp {
       auto send_action = pack(icp_send);
       auto receive_action = pack(icp_receive);
       action(permission_level{_co.icp, N(sendaction)}, _co.icp, N(sendaction), icp_sendaction{seq, send_action, expiration, receive_action}).send(); // TODO: permission
-      // INLINE_ACTION_SENDER(eosio::icp, sendaction)(_co.icp, {_self, N(active)}, {seq, send_action, expiration, receive_action});
    }
 
    void token::icpreceive(account_name contract, account_name icp_from, account_name to, asset quantity, string memo, uint8_t refund) {
@@ -190,14 +189,12 @@ namespace icp {
    }
 
    void token::burn(account_name contract, account_name from, asset quantity) {
-      require_auth(_self);
-
       eosio_assert(is_account(from), "from account does not exist");
       eosio_assert( quantity.is_valid(), "invalid quantity" );
       eosio_assert( quantity.amount > 0, "must burn positive quantity" );
 
       auto sym_name = quantity.symbol.name();
-      stats statstable(_self, sym_name);
+      stats statstable(_self, contract);
       auto& st = statstable.get(sym_name, "token with symbol does not exist, create token before burn");
 
       eosio_assert(quantity.symbol == st.supply.symbol, "symbol precision mismatch");
