@@ -57,10 +57,9 @@ namespace icp {
          o.refund = refund;
       });
 
-      // TODO: permission
       auto send_action = pack(icp_send);
       auto receive_action = pack(icp_receive);
-      action(permission_level{_self, N(active)}, _co.icp, N(sendaction), icp_sendaction{seq, send_action, expiration, receive_action}).send();
+      action(permission_level{_co.icp, N(sendaction)}, _co.icp, N(sendaction), icp_sendaction{seq, send_action, expiration, receive_action}).send(); // TODO: permission
       // INLINE_ACTION_SENDER(eosio::icp, sendaction)(_co.icp, {_self, N(active)}, {seq, send_action, expiration, receive_action});
    }
 
@@ -143,6 +142,7 @@ namespace icp {
          auto h = memo.substr(account_end + 1);
          auto icp_expiration = static_cast<uint32_t>(std::stoul(h));
 
+         // TODO: auth `from`
          icp_transfer(contract, from, icp_to, quantity, memo, icp_expiration, false); // TODO: original memo?
 
       } else { // deposit
@@ -186,7 +186,7 @@ namespace icp {
          s.supply += quantity;
       });
 
-      add_balance(contract, to, quantity, to); // account `to` as ram payer
+      add_balance(contract, to, quantity, _self); // TODO: self as ram payer?
    }
 
    void token::burn(account_name contract, account_name from, asset quantity) {

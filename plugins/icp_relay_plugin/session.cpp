@@ -289,35 +289,35 @@ void session::on_message(const icp_message& msg) {
    try {
       switch (msg.which()) {
          case icp_message::tag<hello>::value:
-            wlog("on hello");
+            // wlog("on hello");
             on(msg.get<hello>());
             break;
          case icp_message::tag<ping>::value:
-            wlog("on ping");
+            // wlog("on ping");
             on(msg.get<ping>());
             break;
          case icp_message::tag<pong>::value:
-            wlog("on pong");
+            // wlog("on pong");
             on(msg.get<pong>());
             break;
          case icp_message::tag<channel_seed>::value:
-            wlog("on channel_seed");
+            // wlog("on channel_seed");
             on(msg.get<channel_seed>());
             break;
          case icp_message::tag<head_notice>::value:
-            wlog("on head_notice");
+            // wlog("on head_notice");
             on(msg.get<head_notice>());
             break;
          case icp_message::tag<block_header_with_merkle_path>::value:
-            wlog("on block_header_with_merkle_path");
+            // wlog("on block_header_with_merkle_path");
             on(msg.get<block_header_with_merkle_path>());
             break;
          case icp_message::tag<icp_actions>::value:
-            wlog("on icp_actions");
+            // wlog("on icp_actions");
             on(msg.get<icp_actions>());
             break;
          case icp_message::tag<packet_receipt_request>::value:
-            wlog("on packet_receipt_request");
+            // wlog("on packet_receipt_request");
             on(msg.get<packet_receipt_request>());
             break;
          default:

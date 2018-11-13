@@ -221,7 +221,7 @@ void relay::update_local_head(bool force) {
       for (auto it = recv_transactions_.begin(); it != recv_transactions_.end();) {
          if (it->block_num > local_head_.last_irreversible_block_num) break;
 
-         wlog("last_incoming_packet_seq: ${lp}, last_incoming_receipt_seq: ${lr}, start_packet_seq: ${sp}, start_receipt_seq: ${sr}", ("lp", s->last_incoming_packet_seq)("lr", s->last_incoming_receipt_seq)("sp", it->start_packet_seq)("sr", it->start_receipt_seq));
+         // wlog("last_incoming_packet_seq: ${lp}, last_incoming_receipt_seq: ${lr}, start_packet_seq: ${sp}, start_receipt_seq: ${sr}", ("lp", s->last_incoming_packet_seq)("lr", s->last_incoming_receipt_seq)("sp", it->start_packet_seq)("sr", it->start_receipt_seq));
          auto req = s->make_genproof_request(it->start_packet_seq, it->start_receipt_seq);
          if (not req.empty()) {
             if (not req_set.count(req)) {
@@ -524,7 +524,7 @@ void relay::cleanup() {
       return;
    }
 
-   wlog("sequence: ${s}", ("s", *s));
+   // wlog("sequence: ${s}", ("s", *s));
 
    auto cleanup_packet = (s->min_packet_seq > 0 and s->last_incoming_receipt_seq > s->min_packet_seq) ? (s->last_incoming_receipt_seq - s->min_packet_seq) : 0; // TODO: consistent receipt and packet sequence?
    auto cleanup_receipt = (s->min_receipt_seq > 0 and s->last_finalised_outgoing_receipt_seq > s->min_receipt_seq) ? (s->last_finalised_outgoing_receipt_seq - s->min_receipt_seq) : 0;

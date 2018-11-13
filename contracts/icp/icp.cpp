@@ -187,7 +187,8 @@ void icp::onpacket(const icpaction& ia) {
     // inline action call
     // if this call fails, the only subsequent means is waiting for the packet's expiration
     auto a = unpack<action>(packet.send_action);
-    a.authorization.emplace_back(_self, N(active)); // TODO
+    // print("onpacket: ", name{a.account}.to_string().c_str(), ", ", name{a.name}.to_string().c_str());
+    a.authorization.emplace_back(a.account, N(callback)); // TODO
     a.send();
 
     // TODO: is it feasible that the inline action generate an inline context free action, which is carried as the receipt's action data?
@@ -236,7 +237,8 @@ void icp::onreceipt(const icpaction& ia) {
     if (not packet.receipt_action.empty()) {
         // this action call **cannot** fail, otherwise the icp will not proceed any more
         auto receipt_action = unpack<action>(packet.receipt_action);
-        receipt_action.authorization.emplace_back(_self, N(active)); // TODO
+        // print("receipt_action: ", uint32_t(receipt.status), ", ", name{receipt_action.name}.to_string().c_str());
+        receipt_action.authorization.emplace_back(receipt_action.account, N(callback)); // TODO
         receipt_action.data = pack(std::make_tuple(receipt.pseq, receipt.status, receipt.data));
         receipt_action.send();
     }
