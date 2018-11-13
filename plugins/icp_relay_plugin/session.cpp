@@ -289,35 +289,35 @@ void session::on_message(const icp_message& msg) {
    try {
       switch (msg.which()) {
          case icp_message::tag<hello>::value:
-            wlog("on hello");
+            // wlog("on hello");
             on(msg.get<hello>());
             break;
          case icp_message::tag<ping>::value:
-            wlog("on ping");
+            // wlog("on ping");
             on(msg.get<ping>());
             break;
          case icp_message::tag<pong>::value:
-            wlog("on pong");
+            // wlog("on pong");
             on(msg.get<pong>());
             break;
          case icp_message::tag<channel_seed>::value:
-            wlog("on channel_seed");
+            // wlog("on channel_seed");
             on(msg.get<channel_seed>());
             break;
          case icp_message::tag<head_notice>::value:
-            wlog("on head_notice");
+            // wlog("on head_notice");
             on(msg.get<head_notice>());
             break;
          case icp_message::tag<block_header_with_merkle_path>::value:
-            wlog("on block_header_with_merkle_path");
+            // wlog("on block_header_with_merkle_path");
             on(msg.get<block_header_with_merkle_path>());
             break;
          case icp_message::tag<icp_actions>::value:
-            wlog("on icp_actions");
+            // wlog("on icp_actions");
             on(msg.get<icp_actions>());
             break;
          case icp_message::tag<packet_receipt_request>::value:
-            wlog("on packet_receipt_request");
+            // wlog("on packet_receipt_request");
             on(msg.get<packet_receipt_request>());
             break;
          default:
@@ -461,12 +461,25 @@ void session::on(const icp_actions& ia) {
       rt.action_add_block = a;
    }
 
-   for (size_t i = 0; i < ia.peer_actions.size(); ++i) {
+   for (auto& p: ia.packet_actions) {
+      auto& s = p.second;
       action a;
-      a.name = ia.peer_actions[i];
-      a.data = fc::raw::pack(icp_action{fc::raw::pack(ia.actions[i]), fc::raw::pack(ia.action_receipts[i]), block_id, fc::raw::pack(ia.action_digests)});
-      // wlog("icp_actions: ${num}, ${ad}, ${rd}", ("num", block_num)("ad", digest_type::hash(ia.actions[i]))("rd", ia.action_receipts[i].act_digest));
-      rt.action_icp.push_back(a);
+      a.name = s.peer_action;
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action), fc::raw::pack(s.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      rt.packet_actions.emplace_back(p.first, a);
+   }
+   for (auto& r: ia.receipt_actions) {
+      auto& s = r.second;
+      action a;
+      a.name = s.peer_action;
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action), fc::raw::pack(s.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      rt.receipt_actions.emplace_back(r.first, a);
+   }
+   for (auto& c: ia.receiptend_actions) {
+      action a;
+      a.name = c.peer_action;
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(c.action), fc::raw::pack(c.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      rt.receiptend_actions.emplace_back(a);
    }
 
    app().get_io_service().post([=, self=shared_from_this()]() mutable {

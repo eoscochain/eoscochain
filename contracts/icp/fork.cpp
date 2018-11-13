@@ -175,7 +175,7 @@ void fork_store::prune(const stored_block_header_state& block_state) {
     }
 }
 
-void fork_store::cutdown(uint32_t block_num) {
+void fork_store::cutdown(uint32_t block_num, uint32_t& max_num) {
     auto head = *_block_states.get_index<N(libblocknum)>().begin();
     auto lib = head.last_irreversible_blocknum();
     eosio_assert(block_num <= lib, "block number not irreversible");
@@ -184,6 +184,7 @@ void fork_store::cutdown(uint32_t block_num) {
     {
         auto by_blocknum = _block_states.get_index<N(blocknum)>();
         for (auto it = by_blocknum.begin(); it != by_blocknum.end() && it->block_num <= block_num;) {
+            if (max_num <= 0) break; --max_num;
             by_blocknum.erase(it);
             it = by_blocknum.begin();
         }
@@ -192,6 +193,7 @@ void fork_store::cutdown(uint32_t block_num) {
         uint32_t num = 0;
         auto by_blocknum = _blocks.get_index<N(blocknum)>();
         for (auto it = by_blocknum.begin(); it != by_blocknum.end() && it->block_num <= block_num;) {
+            if (max_num <= 0) break; --max_num;
             by_blocknum.erase(it);
             it = by_blocknum.begin();
             ++num;

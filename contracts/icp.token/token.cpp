@@ -2,10 +2,34 @@
 
 namespace icp {
 
-   void token::create(account_name contract, symbol_name symbol) {
+   string trim(const string& str) {
+      size_t first = str.find_first_not_of(' ');
+      if (string::npos == first)
+      {
+         return str;
+      }
+      size_t last = str.find_last_not_of(' ');
+      return str.substr(first, (last - first + 1));
+   }
+
+   constexpr uint8_t max_precision = 18;
+
+   symbol_name string_to_symbol(const string& from) {
+         auto s = trim(from);
+         eosio_assert(!s.empty(), "creating symbol from empty string");
+         auto comma_pos = s.find(',');
+         eosio_assert(comma_pos != string::npos, "missing comma in symbol");
+         auto prec_part = s.substr(0, comma_pos);
+         uint8_t p = std::stoull(prec_part);
+         string name_part = s.substr(comma_pos + 1);
+         eosio_assert( p <= max_precision, "precision should be <= 18");
+         return symbol_name(eosio::string_to_symbol(p, name_part.c_str()));
+   }
+
+   void token::create(account_name contract, string symbol) {
       require_auth(_self);
 
-      auto sym = symbol_type(symbol);
+      auto sym = symbol_type(string_to_symbol(symbol));
       eosio_assert(sym.is_valid(), "invalid symbol name");
 
       stats statstable(_self, contract);

@@ -221,6 +221,7 @@ void relay::update_local_head(bool force) {
       for (auto it = recv_transactions_.begin(); it != recv_transactions_.end();) {
          if (it->block_num > local_head_.last_irreversible_block_num) break;
 
+         // wlog("last_incoming_packet_seq: ${lp}, last_incoming_receipt_seq: ${lr}, start_packet_seq: ${sp}, start_receipt_seq: ${sr}", ("lp", s->last_incoming_packet_seq)("lr", s->last_incoming_receipt_seq)("sp", it->start_packet_seq)("sr", it->start_receipt_seq));
          auto req = s->make_genproof_request(it->start_packet_seq, it->start_receipt_seq);
          if (not req.empty()) {
             if (not req_set.count(req)) {
@@ -232,7 +233,7 @@ void relay::update_local_head(bool force) {
          }
 
          auto rt = *it;
-         push_icp_actions(move(rt));
+         push_icp_actions(s, move(rt));
          it = recv_transactions_.erase(it);
       }
 
@@ -247,11 +248,8 @@ void relay::update_local_head(bool force) {
 void relay::on_applied_transaction(const transaction_trace_ptr& t) {
    if (send_transactions_.find(t->id) != send_transactions_.end()) return; // has been handled
 
-   uint64_t start_packet_seq = 0;
-   uint64_t start_receipt_seq = 0;
-   vector<action_name> peer_actions;
-   vector<action> actions;
-   vector<action_receipt> action_receipts;
+   send_transaction st{t->id, t->block_num};
+
    for (auto& action: t->action_traces) {
       if (action.receipt.receiver != action.act.account) continue;
 
@@ -262,11 +260,8 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
                for (auto &inin: in.inline_traces) {
                   if (inin.receipt.receiver != inin.act.account) continue;
                   if (inin.act.name == ACTION_ISPACKET) {
-                     // wlog("ispacket: ${a}, ${n}", ("a", inin.act.account)("n", inin.act.name));
-                     peer_actions.push_back(ACTION_ONPACKET);
-                     actions.push_back(inin.act);
-                     action_receipts.push_back(inin.receipt);
-                     icp_packet::get_seq(inin.act.data, start_packet_seq);
+                     auto seq = icp_packet::get_seq(inin.act.data, st.start_packet_seq);
+                     st.packet_actions[seq] = send_transaction_internal{ACTION_ONPACKET, inin.act, inin.receipt};
                   }
                }
             }
@@ -280,41 +275,45 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
             for (auto &in: action.inline_traces) {
                if (in.receipt.receiver != in.act.account) continue;
                if (in.act.name == ACTION_ISRECEIPT) {
-                  peer_actions.push_back(ACTION_ONRECEIPT);
-                  actions.push_back(in.act);
-                  action_receipts.push_back(in.receipt);
-                  icp_receipt::get_seq(in.act.data, start_receipt_seq);
+                  auto seq = icp_receipt::get_seq(in.act.data, st.start_receipt_seq);
+                  st.receipt_actions[seq] = send_transaction_internal{ACTION_ONRECEIPT, in.act, in.receipt};
                }
             }
          } else if (action.act.name == ACTION_GENPROOF) {
             for (auto &in: action.inline_traces) {
                if (in.receipt.receiver != in.act.account) continue;
-               if (in.act.name == ACTION_ISPACKET || in.act.name == ACTION_ISRECEIPT) {
-                  peer_actions.push_back(in.act.name == ACTION_ISPACKET ? ACTION_ONPACKET : ACTION_ONRECEIPT);
-                  actions.push_back(in.act);
-                  action_receipts.push_back(in.receipt);
-                  if (in.act.name == ACTION_ISPACKET) icp_packet::get_seq(in.act.data, start_packet_seq);
-                  else icp_receipt::get_seq(in.act.data, start_receipt_seq);
+               if (in.act.name == ACTION_ISPACKET) {
+                  auto seq = icp_packet::get_seq(in.act.data, st.start_packet_seq);
+                  st.packet_actions[seq] = send_transaction_internal{ACTION_ONPACKET, in.act, in.receipt};
+               } else if (in.act.name == ACTION_ISRECEIPT) {
+                  auto seq = icp_receipt::get_seq(in.act.data, st.start_receipt_seq);
+                  st.receipt_actions[seq] = send_transaction_internal{ACTION_ONRECEIPT, in.act, in.receipt};
+               } else if (in.act.name == ACTION_ISRECEIPTEND) {
+                  st.receiptend_actions.push_back(send_transaction_internal{ACTION_ONRECEIPTEND, in.act, in.receipt});
                }
             }
-         } else if (action.act.name == ACTION_ONCLEANUP) {
+         /*} else if (action.act.name == ACTION_CLEANUP) {
             for (auto &in: action.inline_traces) {
                if (in.receipt.receiver != in.act.account) continue;
                if (in.act.name == ACTION_ISCLEANUP) {
-                  peer_actions.push_back(ACTION_ONCLEANUP);
-                  actions.push_back(in.act);
-                  action_receipts.push_back(in.receipt);
+                  st.cleanup_actions.push_back(send_transaction_internal{ACTION_ONCLEANUP, in.act, in.receipt});
+               }
+            }*/
+         } else if (action.act.name == ACTION_ONRECEIPT) {
+            for (auto &in: action.inline_traces) {
+               if (in.receipt.receiver != in.act.account) continue;
+               if (in.act.name == ACTION_ISRECEIPTEND) {
+                  st.receiptend_actions.push_back(send_transaction_internal{ACTION_ONRECEIPTEND, in.act, in.receipt});
                }
             }
-         } else if (action.act.name == ACTION_ONRECEIPT) {
-            cleanup_sequences();
+            // cleanup_sequences();
          }
       }
    }
 
-   if (peer_actions.empty()) return;
+   if (st.empty()) return;
 
-   send_transactions_.insert(send_transaction{t->id, t->block_num, start_packet_seq, start_receipt_seq, peer_actions, actions, action_receipts});
+   send_transactions_.insert(st);
 }
 
 void relay::clear_cache_block_state() {
@@ -395,6 +394,10 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
          s->maybe_send_next_message();
       });
    }
+
+   try_catch([this]() mutable {
+      cleanup();
+   });
 }
 
 void relay::on_irreversible_block(const block_state_ptr& s) {
@@ -438,12 +441,24 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
    icp_actions ia;
    ia.block_header = static_cast<block_header>(s->header);
    ia.action_digests = bit->action_digests;
+
+   std::map<uint64_t, send_transaction_internal> packet_actions; // key is packet seq
+   std::map<uint64_t, send_transaction_internal> receipt_actions; // key is receipt seq
    for (auto& t: txs) {
-      ia.peer_actions.insert(ia.peer_actions.end(), t.peer_actions.cbegin(), t.peer_actions.cend());
-      ia.actions.insert(ia.actions.end(), t.actions.cbegin(), t.actions.cend());
-      ia.action_receipts.insert(ia.action_receipts.end(), t.action_receipts.cbegin(), t.action_receipts.cend());
+      packet_actions.insert(t.packet_actions.cbegin(), t.packet_actions.cend());
+      receipt_actions.insert(t.receipt_actions.cbegin(), t.receipt_actions.cend());
+      for (auto& c: t.receiptend_actions) {
+         ia.receiptend_actions.push_back(c);
+      }
       ia.set_seq(t.start_packet_seq, t.start_receipt_seq);
    }
+   for (auto& p: packet_actions) {
+      ia.packet_actions.emplace_back(p.first, p.second);
+   }
+   for (auto& r: receipt_actions) {
+      ia.receipt_actions.emplace_back(r.first, r.second);
+   }
+
    send(ia);
 }
 
@@ -468,23 +483,68 @@ void relay::handle_icp_actions(recv_transaction&& rt) {
       elog("got empty sequence");
    }
 
-   push_icp_actions(move(rt));
+   push_icp_actions(s, move(rt));
 }
 
-void relay::push_icp_actions(recv_transaction&& rt) {
+void relay::push_icp_actions(const sequence_ptr& s, recv_transaction&& rt) {
    app().get_io_service().post([=] {
       if (not rt.action_add_block.name.empty()) {
          push_transaction(vector<action>{rt.action_add_block});
       }
+
       // TODO: rate limiting, cache, and retry
-      for (auto& a: rt.action_icp) {
-         // wlog("action_icp: action ${a}, block num ${n}, is add ${t}", ("a", a.name)("n", rt.block_num)("t", not rt.action_add_block.name.empty()));
+      auto packet_seq = s->last_incoming_packet_seq + 1; // strictly increasing, otherwise fail
+      auto receipt_seq = s->last_incoming_receipt_seq + 1; // strictly increasing, otherwise fail
+      for (auto& p: rt.packet_actions) {
+         if (p.first != packet_seq) continue;
+         push_transaction(vector<action>{p.second});
+         ++packet_seq;
+      }
+      for (auto& r: rt.receipt_actions) {
+         wlog("last_incoming_receipt_seq: ${lr}, receipt seq: ${rs}", ("lr", receipt_seq)("rs", r.first));
+         if (r.first != receipt_seq) continue;
+         push_transaction(vector<action>{r.second});
+         ++receipt_seq;
+      }
+      for (auto& a: rt.receiptend_actions) {
          push_transaction(vector<action>{a});
       }
    });
 }
 
-void relay::cleanup_sequences() {
+void relay::cleanup() {
+   if (not local_head_.valid()) return;
+
+   ++cumulative_cleanup_count_;
+   if (cumulative_cleanup_count_ < MAX_CLEANUP_NUM) return;
+
+   auto s = get_read_only_api().get_sequence(true);
+   if (not s) {
+      elog("got empty sequence");
+      return;
+   }
+
+   // wlog("sequence: ${s}", ("s", *s));
+
+   auto cleanup_packet = (s->min_packet_seq > 0 and s->last_incoming_receipt_seq > s->min_packet_seq) ? (s->last_incoming_receipt_seq - s->min_packet_seq) : 0; // TODO: consistent receipt and packet sequence?
+   auto cleanup_receipt = (s->min_receipt_seq > 0 and s->last_finalised_outgoing_receipt_seq > s->min_receipt_seq) ? (s->last_finalised_outgoing_receipt_seq - s->min_receipt_seq) : 0;
+   auto cleanup_block = (s->min_block_num > 0 and s->max_finished_block_num() > s->min_block_num) ? (s->max_finished_block_num() - s->min_block_num) : 0;
+   if (cleanup_packet >= MAX_CLEANUP_NUM or cleanup_receipt >= MAX_CLEANUP_NUM or cleanup_block >= MAX_CLEANUP_NUM) {
+      app().get_io_service().post([=] {
+         action a;
+         a.name = ACTION_CLEANUP;
+         a.data = fc::raw::pack(icp::cleanup{MAX_CLEANUP_NUM});
+         wlog("cleanup *************************************");
+         push_transaction(vector<action>{a});
+      });
+   }
+
+   if (cleanup_packet + cleanup_receipt + cleanup_block < 2*MAX_CLEANUP_NUM) {
+      cumulative_cleanup_count_ = 0;
+   }
+}
+
+/*void relay::cleanup_sequences() {
    ++cumulative_cleanup_sequences_;
    if (cumulative_cleanup_sequences_ < MAX_CLEANUP_SEQUENCES) return;
 
@@ -493,6 +553,8 @@ void relay::cleanup_sequences() {
       elog("got empty sequence");
       return;
    }
+
+   wlog("min_packet_seq: ${m}, last_incoming_receipt_seq: ${r}", ("m", s->min_packet_seq)("r", s->last_incoming_receipt_seq));
 
    if (s->min_packet_seq > 0 and s->last_incoming_receipt_seq - s->min_packet_seq >= MAX_CLEANUP_SEQUENCES) { // TODO: consistent receipt and packet sequence?
       app().get_io_service().post([=] {
@@ -504,6 +566,6 @@ void relay::cleanup_sequences() {
       });
    }
    cumulative_cleanup_sequences_ = 0;
-}
+}*/
 
 }

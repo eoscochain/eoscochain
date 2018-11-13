@@ -93,7 +93,7 @@ void icp::sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration
    // NB: this permission should be authorized to application layer contract's `eosio.code` permission
    require_auth2(_self, N(sendaction));
 
-   eosio_assert(seq == ++_peer.last_outgoing_packet_seq, "invalid outgoing packet sequence");
+   eosio_assert(seq == ++_peer.last_outgoing_packet_seq, ("invalid outgoing packet sequence " + std::to_string(seq)).data());
    update_peer(); // update `last_outgoing_packet_seq`
 
    packet_table packets(_self, _self);
@@ -116,20 +116,21 @@ void icp::sendaction(uint64_t seq, const bytes& send_action, uint32_t expiration
 }
 
 void icp::maybe_cutdown(const checksum256& id, incoming_type type) {
-   auto old_max = _peer.max_finished_block_num();
+   // auto old_max = _peer.max_finished_block_num();
    auto num = block_header::num_from_id(id);
    switch (type) {
       case incoming_type::packet: _peer.last_incoming_packet_block_num = num; break;
       case incoming_type::receipt: _peer.last_incoming_receipt_block_num = num; break;
-      case incoming_type::cleanup: _peer.last_incoming_cleanup_block_num = num; break;
+      case incoming_type::receiptend: _peer.last_incoming_receiptend_block_num = num; break;
    }
-   auto new_max = _peer.max_finished_block_num();
+   /*auto new_max = _peer.max_finished_block_num();
    if (new_max > old_max) {
-       _store->cutdown(new_max); // TODO: limit the max cutdown number
-   }
+       print("cutdown to block: ", new_max);
+       _store->cutdown(new_max, 50); // TODO: limit the max cutdown number, configurable
+   }*/
 }
 
-bytes icp::extract_action(const icpaction& ia) {
+bytes icp::extract_action(const icpaction& ia, const action_name& name) {
     eosio_assert(_peer.peer, "empty peer icp contract");
 
     auto action_mroot = _store->get_action_mroot(ia.block_id);
@@ -154,16 +155,16 @@ bytes icp::extract_action(const icpaction& ia) {
     auto action_digest = sha256(a);
     eosio_assert(action_digest == receipt.act_digest, "invalid action digest");
     eosio_assert(a.account == _peer.peer, "invalid peer icp contract");
-    eosio_assert(a.name == N(ispacket) or a.name == N(isreceipt) or a.name == N(iscleanup), "invalid peer icp contract action");
+    eosio_assert(a.name == name, "invalid peer icp contract action");
     return a.data;
 }
 
 void icp::onpacket(const icpaction& ia) {
-    auto action_data = extract_action(ia);
+    auto action_data = extract_action(ia, N(ispacket));
     maybe_cutdown(ia.block_id, incoming_type::packet);
 
     auto packet = unpack<icp_packet>(action_data);
-    eosio_assert(packet.seq == _peer.last_incoming_packet_seq + 1, "invalid incoming packet sequence"); // TODO: is the sort order necessary?
+    eosio_assert(packet.seq == _peer.last_incoming_packet_seq + 1, ("invalid incoming packet sequence " + std::to_string(packet.seq)).data()); // TODO: is the sort order necessary?
 
     ++_peer.last_incoming_packet_seq;
     ++_peer.last_outgoing_receipt_seq;
@@ -186,7 +187,8 @@ void icp::onpacket(const icpaction& ia) {
     // inline action call
     // if this call fails, the only subsequent means is waiting for the packet's expiration
     auto a = unpack<action>(packet.send_action);
-    a.authorization.emplace_back(_self, N(active)); // TODO
+    // print("onpacket: ", name{a.account}.to_string().c_str(), ", ", name{a.name}.to_string().c_str());
+    a.authorization.emplace_back(a.account, N(callback)); // TODO
     a.send();
 
     // TODO: is it feasible that the inline action generate an inline context free action, which is carried as the receipt's action data?
@@ -199,17 +201,13 @@ void icp::onpacket(const icpaction& ia) {
 }
 
 void icp::onreceipt(const icpaction& ia) {
-    print(" a ");
-    auto action_data = extract_action(ia);
-    print(" b ");
+    auto action_data = extract_action(ia, N(isreceipt));
     maybe_cutdown(ia.block_id, incoming_type::receipt);
 
-    print(" c ");
     auto receipt = unpack<icp_receipt>(action_data);
-    eosio_assert(receipt.seq == _peer.last_incoming_receipt_seq + 1, "invalid receipt sequence");
+    eosio_assert(receipt.seq == _peer.last_incoming_receipt_seq + 1, ("invalid receipt sequence " + std::to_string(receipt.seq)).data());
 
     ++_peer.last_incoming_receipt_seq;
-    print(" d ");
     update_peer();
 
     // receipt_table receipts(_self, _self);
@@ -232,48 +230,131 @@ void icp::onreceipt(const icpaction& ia) {
     auto status = static_cast<receipt_status>(receipt.status);
     eosio_assert(status == receipt_status::executed || status == receipt_status::expired, "invalid receipt status");
 
-    print(" e ");
     packets.modify(packet, 0, [&](auto& p) {
         p.status = receipt.status;
     });
-    print(" f ");
 
     if (not packet.receipt_action.empty()) {
         // this action call **cannot** fail, otherwise the icp will not proceed any more
         auto receipt_action = unpack<action>(packet.receipt_action);
-        receipt_action.authorization.emplace_back(_self, N(active)); // TODO
+        // print("receipt_action: ", uint32_t(receipt.status), ", ", name{receipt_action.name}.to_string().c_str());
+        receipt_action.authorization.emplace_back(receipt_action.account, N(callback)); // TODO
         receipt_action.data = pack(std::make_tuple(receipt.pseq, receipt.status, receipt.data));
         receipt_action.send();
     }
+
+    action(vector<permission_level>{}, _self, N(isreceiptend), receipt.seq).send();
 }
 
-void icp::oncleanup(const icpaction& ia) {
-    auto action_data = extract_action(ia);
+void icp::onreceiptend(const icpaction& ia) {
+    auto action_data = extract_action(ia, N(isreceiptend));
+    maybe_cutdown(ia.block_id, incoming_type::receiptend);
+
+    auto seq = unpack<uint64_t>(action_data);
+
+    _peer.last_finalised_outgoing_receipt_seq = seq;
+    update_peer();
+}
+
+void icp::genproof(uint64_t packet_seq, uint64_t receipt_seq, uint8_t finalised_receipt) { // TODO: rate limiting, anti spam
+   eosio_assert(_peer.peer, "empty peer icp contract");
+
+   if (packet_seq > 0) {
+       packet_table packets(_self, _self);
+       auto packet = packets.get(packet_seq, "unable find icp_packet sequence");
+       packet.shadow = true;
+       action(vector<permission_level>{}, _self, N(ispacket), packet).send();
+   }
+
+   if (receipt_seq > 0) {
+       receipt_table receipts(_self, _self);
+       auto receipt = receipts.get(receipt_seq, "unable find icp_receipt sequence");
+       receipt.shadow = true;
+       action(vector<permission_level>{}, _self, N(isreceipt), receipt).send();
+   }
+
+   if (finalised_receipt > 0) {
+       action(vector<permission_level>{}, _self, N(isreceiptend), _peer.last_incoming_receipt_seq).send();
+   }
+}
+
+void icp::cleanup(uint32_t max_num) {
+   eosio_assert(_peer.peer, "empty peer icp contract");
+
+   if (max_num == 0) max_num = std::numeric_limits<uint32_t>::max();
+   auto old_max_num = max_num;
+
+   packet_table packets(_self, _self);
+   uint32_t num = 0;
+   for (auto it = packets.begin(); it != packets.end() and static_cast<receipt_status>(it->status) != receipt_status::unknown;) {
+       if (max_num <= 0) break; --max_num;
+       it = packets.erase(it);
+       ++num;
+   }
+
+   meter_remove_packets(num);
+
+   receipt_table receipts(_self, _self);
+   for (auto it = receipts.begin(); it != receipts.end() and it->seq <= _peer.last_finalised_outgoing_receipt_seq;) {
+       if (max_num <= 0) break; --max_num;
+       it = receipts.erase(it);
+   }
+
+   auto block_num = _peer.max_finished_block_num();
+   print("cutdown to block: ", block_num);
+   _store->cutdown(block_num, max_num);
+
+   eosio_assert(max_num < old_max_num, "cleanup nothing");
+}
+
+void icp::dummy(account_name from) {
+   require_auth(from);
+   // TODO: auth
+   auto seq = next_packet_seq();
+   // auto icp_send = action(vector<permission_level>{}, _peer.peer, 0, bytes{});
+   auto send_action = bytes{};
+   auto receive_action = bytes{};
+   // set expiration to 0
+   INLINE_ACTION_SENDER(eosio::icp, sendaction)(_self, {_self, N(sendaction)}, {seq, send_action, 0, receive_action});
+}
+
+uint64_t icp::next_packet_seq() const {
+   return eosio::next_packet_seq(_self);
+}
+
+void icp::update_peer() {
+   peer_singleton peer(_self, _self);
+   peer.set(_peer, _self);
+}
+
+/*void icp::oncleanup(const icpaction& ia) {
+    auto action_data = extract_action(ia, N(iscleanup));
     maybe_cutdown(ia.block_id, incoming_type::cleanup);
     update_peer();
+
+    print("cleanup");
 
     auto erased_range = unpack<std::pair<uint64_t, uint64_t>>(action_data);
     eosio_assert(erased_range.first <= erased_range.second, "invalid range");
 
     receipt_table receipts(_self, _self);
     auto by_pseq = receipts.get_index<N(pseq)>();
-    for (auto seq = erased_range.first; seq <= erased_range.second; ++seq) {
-        auto it = by_pseq.find(seq);
-        if (it != by_pseq.end()) {
-            by_pseq.erase(it);
-        }
+    for (auto it = by_pseq.lower_bound(erased_range.first); it != by_pseq.end() and it->pseq <= erased_range.second;) {
+        it = by_pseq.erase(it);
     }
-}
+}*/
 
-void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
+/* void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
     eosio_assert(_peer.peer, "empty peer icp contract");
     eosio_assert(start_seq <= end_seq, "invalid range");
 
     packet_table packets(_self, _self);
 
     // Packet with seq `end_seq` must own receipt
-    auto p = packets.get(end_seq, "unable find icp_packet sequence");
-    eosio_assert(static_cast<receipt_status>(p.status) != receipt_status::unknown, "packet hasn't received receipt");
+    auto eit = packets.find(end_seq);
+    eosio_assert(eit != packets.end(), "unable find icp_packet sequence");
+    auto& end_packet = *eit;
+    eosio_assert(static_cast<receipt_status>(end_packet.status) != receipt_status::unknown, "packet hasn't received receipt");
 
     std::pair<uint64_t, uint64_t> erased_range = std::make_pair(start_seq, start_seq < end_seq ? end_seq - 1 : end_seq);
 
@@ -292,12 +373,10 @@ void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
         ++num;
     }
 
-    auto it = packets.upper_bound(end_seq);
-    eosio_assert(it != packets.end() && it->seq == end_seq, "packet not found");
+    auto it = packets.begin();
     // If no previous pending packets exists, erase the packet `end_seq`
-    auto eit = it--;
-    if (it == packets.end()) {
-        packets.erase(eit);
+    if (it == packets.end() or it->seq >= end_seq) {
+        packets.erase(end_packet);
         erased_range.second = end_seq;
         ++num;
     }
@@ -305,8 +384,9 @@ void icp::cleanup(uint64_t start_seq, uint64_t end_seq) {
     meter_remove_packets(num);
 
     action(vector<permission_level>{}, _self, N(iscleanup), erased_range).send();
-}
+} */
 
+/*
 void icp::prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq) {
     require_auth(_self); // mutlisig authorization
 
@@ -315,43 +395,7 @@ void icp::prune(uint64_t receipt_start_seq, uint64_t receipt_end_seq) {
         it = receipts.erase(it);
     }
 }
-
-void icp::genproof(uint64_t packet_seq, uint64_t receipt_seq) { // TODO: rate limiting, anti spam
-    if (packet_seq > 0) {
-        packet_table packets(_self, _self);
-        auto packet = packets.get(packet_seq, "unable find icp_packet sequence");
-        packet.shadow = true;
-        action(vector<permission_level>{}, _self, N(ispacket), packet).send();
-    }
-
-    if (receipt_seq > 0) {
-        receipt_table receipts(_self, _self);
-        auto receipt = receipts.get(receipt_seq, "unable find icp_receipt sequence");
-        receipt.shadow = true;
-        action(vector<permission_level>{}, _self, N(isreceipt), receipt).send();
-    }
-}
-
-void icp::dummy(account_name from) {
-    require_auth(from);
-    // TODO: auth
-    auto seq = next_packet_seq();
-    // auto icp_send = action(vector<permission_level>{}, _peer.peer, 0, bytes{});
-    auto send_action = bytes{};
-    auto receive_action = bytes{};
-    // set expiration to 0
-    INLINE_ACTION_SENDER(eosio::icp, sendaction)(_self, {_self, N(sendaction)}, {seq, send_action, 0, receive_action});
-}
-
-uint64_t icp::next_packet_seq() const {
-    eosio_assert(_peer.peer, "empty peer icp contract");
-    return _peer.last_outgoing_packet_seq + 1;
-}
-
-void icp::update_peer() {
-    peer_singleton peer(_self, _self);
-    peer.set(_peer, _self);
-}
+*/
 
 void icp::meter_add_packets(uint32_t num) {
     if (num <= 0) return;
@@ -373,4 +417,4 @@ void icp::meter_remove_packets(uint32_t num) {
 }
 
 EOSIO_ABI(eosio::icp, (setpeer)(setmaxpackes)(setmaxblocks)(openchannel)(closechannel)
-                      (addblocks)(addblock)(onpacket)(onreceipt)(oncleanup)(cleanup)(sendaction)(genproof)(dummy)(prune))
+                      (addblocks)(addblock)(sendaction)(onpacket)(onreceipt)(onreceiptend)(cleanup)(genproof)(dummy))

@@ -1,9 +1,8 @@
 #include "icp.token.hpp"
 
-#include <eosio.token/eosio.token.hpp>
 #include <eosiolib/datastream.hpp>
 #include <eosiolib/action.hpp>
-#include <icp/icp.hpp>
+#include <eosiolib/icp.hpp>
 
 #include "token.cpp"
 
@@ -24,22 +23,29 @@ namespace icp {
    }
 
    struct transfer_args {
+      account_name  from;
+      account_name  to;
+      asset         quantity;
+      string        memo;
+   };
+
+   struct icp_transfer_args {
       account_name  contract;
       account_name  from;
       account_name  to;
       asset         quantity;
       string        memo;
-      bool          refund;
+      uint8_t       refund;
    };
 
    void token::icp_transfer(account_name contract, account_name from, account_name icp_to, asset quantity, string memo, uint32_t expiration, bool refund) {
       eosio_assert(_co.peer, "empty remote peer contract");
       eosio_assert(_co.icp, "empty local icp contract");
 
-      auto seq = eosio::icp(_co.icp).next_packet_seq();
+      auto seq = eosio::next_packet_seq(_co.icp);
 
       auto icp_send = action(vector<permission_level>{}, _co.peer, N(icpreceive),
-                             transfer_args{contract, from, icp_to, quantity, memo, refund});
+                             icp_transfer_args{contract, from, icp_to, quantity, memo, refund});
       auto icp_receive = action(vector<permission_level>{}, _self, N(icpreceipt), false); // here action data won't be used
 
       locked l(_self, _self);
@@ -51,13 +57,12 @@ namespace icp {
          o.refund = refund;
       });
 
-      // TODO: permission
       auto send_action = pack(icp_send);
       auto receive_action = pack(icp_receive);
-      INLINE_ACTION_SENDER(eosio::icp, sendaction)(_co.icp, {_self, N(active)}, {seq, send_action, expiration, receive_action});
+      action(permission_level{_co.icp, N(sendaction)}, _co.icp, N(sendaction), icp_sendaction{seq, send_action, expiration, receive_action}).send(); // TODO: permission
    }
 
-   void token::icpreceive(account_name contract, account_name icp_from, account_name to, asset quantity, string memo, bool refund) {
+   void token::icpreceive(account_name contract, account_name icp_from, account_name to, asset quantity, string memo, uint8_t refund) {
       // NB: this permission should be authorized to icp contract's `eosio.code` permission
       require_auth2(_self, N(callback));
 
@@ -67,21 +72,21 @@ namespace icp {
          mint(contract, to, quantity);
       } else {
          action(permission_level{_self, N(active)}, contract, N(transfer),
-                eosio::token::transfer_args{_self, to, quantity, memo}).send();
+                transfer_args{_self, to, quantity, memo}).send();
       }
    }
 
-   void token::icpreceipt(uint64_t seq, receipt_status status, bytes data) {
+   void token::icpreceipt(uint64_t seq, uint8_t status, bytes data) {
       // NB: this permission should be authorized to icp contract's `eosio.code` permission
       require_auth2(_self, N(callback));
 
       locked l(_self, _self);
       auto it = l.find(seq);
       if (it != l.end()) {
-         if (status == receipt_status::expired) { // icp transfer transaction expired or failed, so release locked asset
+         if (static_cast<receipt_status>(status) == receipt_status::expired) { // icp transfer transaction expired or failed, so release locked asset
             if (!it->refund) {
                action(permission_level{_self, N(active)}, it->contract, N(transfer),
-                      eosio::token::transfer_args{_self, it->account, it->balance, "icp release locked asset"}).send();
+                      transfer_args{_self, it->account, it->balance, "icp release locked asset"}).send();
             } else {
                mint(it->contract, it->account, it->balance);
             }
@@ -122,11 +127,13 @@ namespace icp {
 
    void token::icp_transfer_or_deposit(account_name contract, account_name from, account_name to, asset quantity, string memo) {
       // only care about token receiving
+      print("icp_transfer_or_deposit");
       if (to != _self) {
          return;
       }
 
       if (memo.find("icp ") == 0) { // it is an icp call
+         print("icp");
          auto account_end = memo.find(' ', 4);
          eosio_assert(account_end != std::string::npos, "invalid icp token transfer memo");
          auto n = memo.substr(4, account_end - 4);
@@ -134,17 +141,24 @@ namespace icp {
          auto h = memo.substr(account_end + 1);
          auto icp_expiration = static_cast<uint32_t>(std::stoul(h));
 
+         // TODO: auth `from`
          icp_transfer(contract, from, icp_to, quantity, memo, icp_expiration, false); // TODO: original memo?
 
       } else { // deposit
+         print("deposit");
          deposits dps(_self, contract);
-         auto dp = dps.find(quantity.symbol.name());
-         if (dp == dps.end()) {
-            dps.emplace(from, [&](auto &a) {
+         auto by_account_asset = dps.get_index<N(accountasset)>();
+         auto it = by_account_asset.find(account_asset_key(from, quantity));
+         if (it == by_account_asset.end()) {
+            // NB: Must set payer to self, otherwise, "Cannot charge RAM to other accounts during notify".
+            // TODO: charge manually
+            dps.emplace(_self, [&](auto &a) {
+               a.pk = dps.available_primary_key();
+               a.account = from;
                a.balance = quantity;
             });
          } else {
-            dps.modify(dp, 0, [&](auto &a) {
+            by_account_asset.modify(it, 0, [&](auto &a) {
                a.balance += quantity;
             });
          }
@@ -171,18 +185,16 @@ namespace icp {
          s.supply += quantity;
       });
 
-      add_balance(contract, to, quantity, to); // account `to` as ram payer
+      add_balance(contract, to, quantity, _self); // TODO: self as ram payer?
    }
 
    void token::burn(account_name contract, account_name from, asset quantity) {
-      require_auth(_self);
-
       eosio_assert(is_account(from), "from account does not exist");
       eosio_assert( quantity.is_valid(), "invalid quantity" );
       eosio_assert( quantity.amount > 0, "must burn positive quantity" );
 
       auto sym_name = quantity.symbol.name();
-      stats statstable(_self, sym_name);
+      stats statstable(_self, contract);
       auto& st = statstable.get(sym_name, "token with symbol does not exist, create token before burn");
 
       eosio_assert(quantity.symbol == st.supply.symbol, "symbol precision mismatch");
@@ -213,7 +225,7 @@ extern "C" {
          }
       }
       if (code != self && action == N(transfer)) {
-         auto args = eosio::unpack_action_data<eosio::token::transfer_args>();
+         auto args = eosio::unpack_action_data<icp::transfer_args>();
          icp::token thiscontract(self);
          thiscontract.icp_transfer_or_deposit(code, args.from, args.to, args.quantity, args.memo);
       }

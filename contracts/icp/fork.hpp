@@ -112,7 +112,7 @@ public:
     void set_max_blocks(uint32_t max);
     void add_block_header_with_merkle_path(const block_header_state& h, const vector<block_id_type>& merkle_path);
     void add_block_header(const block_header& h);
-    void cutdown(uint32_t block_num);
+    void cutdown(uint32_t block_num, uint32_t& max_num);
     checksum256 get_action_mroot(const block_id_type& block_id);
 
 private:

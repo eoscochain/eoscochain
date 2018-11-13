@@ -38,8 +38,19 @@ struct sequence {
    uint64_t last_outgoing_receipt_seq = 0;
    uint64_t last_incoming_receipt_seq = 0;
 
+   uint64_t last_finalised_outgoing_receipt_seq = 0;
+
+   uint32_t last_incoming_packet_block_num = 0;
+   uint32_t last_incoming_receipt_block_num = 0;
+   uint32_t last_incoming_receiptend_block_num = 0;
+
    uint64_t min_packet_seq = 0;
    uint64_t min_receipt_seq = 0;
+   uint64_t min_block_num = 0;
+
+   uint32_t max_finished_block_num() const {
+      return std::min({last_incoming_packet_block_num, last_incoming_receipt_block_num, last_incoming_receiptend_block_num});
+   }
 
    packet_receipt_request make_genproof_request(uint64_t start_packet_seq, uint64_t start_receipt_seq);
 };
@@ -111,6 +122,7 @@ private:
 
 FC_REFLECT(icp::empty, )
 FC_REFLECT(icp::head, (head_block_num)(head_block_id)(last_irreversible_block_num)(last_irreversible_block_id))
+FC_REFLECT(icp::sequence, (last_outgoing_packet_seq)(last_incoming_packet_seq)(last_outgoing_receipt_seq)(last_incoming_receipt_seq)(last_finalised_outgoing_receipt_seq)(last_incoming_packet_block_num)(last_incoming_receipt_block_num)(last_incoming_receiptend_block_num)(min_packet_seq)(min_receipt_seq)(min_block_num))
 FC_REFLECT(icp::read_only::get_block_params, (id))
 FC_REFLECT(icp::read_only::get_block_results, (block))
 FC_REFLECT(icp::read_only::get_info_results, (icp_version)(local_chain_id)(peer_chain_id)(local_contract)(peer_contract)

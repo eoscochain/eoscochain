@@ -1,0 +1,380 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Mon Nov 12 19:48:38 2018",
+    "version": "eosio::abi/1.0",
+    "structs": [
+        {
+            "name": "account",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pk",
+                    "type": "uint64"
+                },
+                {
+                    "name": "account",
+                    "type": "name"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "account_deposit",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pk",
+                    "type": "uint64"
+                },
+                {
+                    "name": "account",
+                    "type": "name"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "account_locked",
+            "base": "",
+            "fields": [
+                {
+                    "name": "seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "account",
+                    "type": "name"
+                },
+                {
+                    "name": "balance",
+                    "type": "asset"
+                },
+                {
+                    "name": "refund",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "account_stats",
+            "base": "",
+            "fields": [
+                {
+                    "name": "supply",
+                    "type": "asset"
+                }
+            ]
+        },
+        {
+            "name": "collaborative_contract",
+            "base": "",
+            "fields": [
+                {
+                    "name": "icp",
+                    "type": "name"
+                },
+                {
+                    "name": "peer",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "create",
+            "base": "",
+            "fields": [
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "symbol",
+                    "type": "string"
+                }
+            ]
+        },
+        {
+            "name": "icpreceipt",
+            "base": "",
+            "fields": [
+                {
+                    "name": "seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "status",
+                    "type": "uint8"
+                },
+                {
+                    "name": "data",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "icpreceive",
+            "base": "",
+            "fields": [
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "icp_from",
+                    "type": "name"
+                },
+                {
+                    "name": "to",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
+                },
+                {
+                    "name": "memo",
+                    "type": "string"
+                },
+                {
+                    "name": "refund",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "icprefund",
+            "base": "",
+            "fields": [
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "from",
+                    "type": "name"
+                },
+                {
+                    "name": "icp_to",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
+                },
+                {
+                    "name": "memo",
+                    "type": "string"
+                },
+                {
+                    "name": "expiration",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "icptransfer",
+            "base": "",
+            "fields": [
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "from",
+                    "type": "name"
+                },
+                {
+                    "name": "icp_to",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
+                },
+                {
+                    "name": "memo",
+                    "type": "string"
+                },
+                {
+                    "name": "expiration",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "peer_contract",
+            "base": "",
+            "fields": [
+                {
+                    "name": "peer",
+                    "type": "name"
+                },
+                {
+                    "name": "last_outgoing_packet_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_incoming_packet_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_outgoing_receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_incoming_receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_finalised_outgoing_receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_incoming_packet_block_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "last_incoming_receipt_block_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "last_incoming_receiptend_block_num",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "setcontracts",
+            "base": "",
+            "fields": [
+                {
+                    "name": "icp",
+                    "type": "name"
+                },
+                {
+                    "name": "peer",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "transfer",
+            "base": "",
+            "fields": [
+                {
+                    "name": "contract",
+                    "type": "name"
+                },
+                {
+                    "name": "from",
+                    "type": "name"
+                },
+                {
+                    "name": "to",
+                    "type": "name"
+                },
+                {
+                    "name": "quantity",
+                    "type": "asset"
+                },
+                {
+                    "name": "memo",
+                    "type": "string"
+                }
+            ]
+        }
+    ],
+    "types": [],
+    "actions": [
+        {
+            "name": "create",
+            "type": "create",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "icpreceipt",
+            "type": "icpreceipt",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "icpreceive",
+            "type": "icpreceive",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "icprefund",
+            "type": "icprefund",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "icptransfer",
+            "type": "icptransfer",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setcontracts",
+            "type": "setcontracts",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "transfer",
+            "type": "transfer",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [
+        {
+            "name": "accounts",
+            "type": "account",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "deposit",
+            "type": "account_deposit",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "locked",
+            "type": "account_locked",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "stat",
+            "type": "account_stats",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "co",
+            "type": "collaborative_contract",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "peer",
+            "type": "peer_contract",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "ricardian_clauses": [],
+    "abi_extensions": []
+}

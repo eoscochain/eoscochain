@@ -9,9 +9,10 @@ using namespace eosio::chain;
 
 // TODO: configurable
 constexpr uint32_t MAX_CACHED_BLOCKS = 50; // 1000
-constexpr uint32_t MIN_CACHED_BLOCKS = 10; // 100
-constexpr uint32_t DUMMY_ICP_SECONDS = 10; // 3600
-constexpr uint32_t MAX_CLEANUP_SEQUENCES = 10;
+constexpr uint32_t MIN_CACHED_BLOCKS = 20; // 100
+constexpr uint32_t DUMMY_ICP_SECONDS = 20; // 3600
+// constexpr uint32_t MAX_CLEANUP_SEQUENCES = 3;
+constexpr uint32_t MAX_CLEANUP_NUM = 10;
 
 struct by_id;
 struct by_num;
@@ -24,6 +25,11 @@ typedef boost::multi_index_container<block_header_state,
    >
 > block_state_index;
 
+struct send_transaction_internal {
+   action_name peer_action;
+   action action;
+   action_receipt action_receipt;
+};
 struct send_transaction {
    transaction_id_type id;
    uint32_t block_num = 0;
@@ -31,9 +37,14 @@ struct send_transaction {
    uint64_t start_packet_seq = 0;
    uint64_t start_receipt_seq = 0;
 
-   vector<action_name> peer_actions;
-   vector<action> actions;
-   vector<action_receipt> action_receipts;
+   std::map<uint64_t, send_transaction_internal> packet_actions; // key is packet seq
+   std::map<uint64_t, send_transaction_internal> receipt_actions; // key is receipt seq
+   // vector<send_transaction_internal> cleanup_actions;
+   vector<send_transaction_internal> receiptend_actions;
+
+   bool empty() const {
+      return packet_actions.empty() and receipt_actions.empty() and receiptend_actions.empty();
+   }
 };
 
 typedef boost::multi_index_container<send_transaction,
@@ -62,7 +73,13 @@ struct recv_transaction {
    uint64_t start_receipt_seq;
 
    action action_add_block;
-   vector<action> action_icp;
+
+   vector<std::pair<uint64_t, action>> packet_actions; // key is packet seq
+   vector<std::pair<uint64_t, action>> receipt_actions; // key is receipt seq
+   // vector<action> cleanup_actions;
+   vector<action> receiptend_actions;
+
+   // vector<action> action_icp;
 };
 
 typedef boost::multi_index_container<recv_transaction,

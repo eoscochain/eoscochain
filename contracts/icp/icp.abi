@@ -1,0 +1,551 @@
+{
+    "____comment": "This file was generated with eosio-abigen. DO NOT EDIT Mon Nov 12 17:35:12 2018",
+    "version": "eosio::abi/1.0",
+    "structs": [
+        {
+            "name": "addblock",
+            "base": "",
+            "fields": [
+                {
+                    "name": "data",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "addblocks",
+            "base": "",
+            "fields": [
+                {
+                    "name": "data",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "cleanup",
+            "base": "",
+            "fields": [
+                {
+                    "name": "max_num",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "closechannel",
+            "base": "",
+            "fields": [
+                {
+                    "name": "clear_all",
+                    "type": "uint8"
+                },
+                {
+                    "name": "max_num",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "dummy",
+            "base": "",
+            "fields": [
+                {
+                    "name": "from",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "genproof",
+            "base": "",
+            "fields": [
+                {
+                    "name": "packet_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "finalised_receipt",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "icp_meter",
+            "base": "",
+            "fields": [
+                {
+                    "name": "max_packets",
+                    "type": "uint32"
+                },
+                {
+                    "name": "current_packets",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "icp_packet",
+            "base": "",
+            "fields": [
+                {
+                    "name": "seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "expiration",
+                    "type": "uint32"
+                },
+                {
+                    "name": "send_action",
+                    "type": "bytes"
+                },
+                {
+                    "name": "receipt_action",
+                    "type": "bytes"
+                },
+                {
+                    "name": "status",
+                    "type": "uint8"
+                },
+                {
+                    "name": "shadow",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "icp_receipt",
+            "base": "",
+            "fields": [
+                {
+                    "name": "seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "pseq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "status",
+                    "type": "uint8"
+                },
+                {
+                    "name": "data",
+                    "type": "bytes"
+                },
+                {
+                    "name": "shadow",
+                    "type": "uint8"
+                }
+            ]
+        },
+        {
+            "name": "icpaction",
+            "base": "",
+            "fields": [
+                {
+                    "name": "action",
+                    "type": "bytes"
+                },
+                {
+                    "name": "action_receipt",
+                    "type": "bytes"
+                },
+                {
+                    "name": "block_id",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "merkle_path",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "onpacket",
+            "base": "",
+            "fields": [
+                {
+                    "name": "ia",
+                    "type": "icpaction"
+                }
+            ]
+        },
+        {
+            "name": "onreceipt",
+            "base": "",
+            "fields": [
+                {
+                    "name": "ia",
+                    "type": "icpaction"
+                }
+            ]
+        },
+        {
+            "name": "onreceiptend",
+            "base": "",
+            "fields": [
+                {
+                    "name": "ia",
+                    "type": "icpaction"
+                }
+            ]
+        },
+        {
+            "name": "openchannel",
+            "base": "",
+            "fields": [
+                {
+                    "name": "data",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "peer_contract",
+            "base": "",
+            "fields": [
+                {
+                    "name": "peer",
+                    "type": "name"
+                },
+                {
+                    "name": "last_outgoing_packet_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_incoming_packet_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_outgoing_receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_incoming_receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_finalised_outgoing_receipt_seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "last_incoming_packet_block_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "last_incoming_receipt_block_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "last_incoming_receiptend_block_num",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "pending_schedule",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pending_schedule_lib_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "pending_schedule_hash",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "pending_schedule",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "sendaction",
+            "base": "",
+            "fields": [
+                {
+                    "name": "seq",
+                    "type": "uint64"
+                },
+                {
+                    "name": "send_action",
+                    "type": "bytes"
+                },
+                {
+                    "name": "expiration",
+                    "type": "uint32"
+                },
+                {
+                    "name": "receipt_action",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "setmaxblocks",
+            "base": "",
+            "fields": [
+                {
+                    "name": "maxblocks",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "setmaxpackes",
+            "base": "",
+            "fields": [
+                {
+                    "name": "maxpackets",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "setpeer",
+            "base": "",
+            "fields": [
+                {
+                    "name": "peer",
+                    "type": "name"
+                }
+            ]
+        },
+        {
+            "name": "store_meter",
+            "base": "",
+            "fields": [
+                {
+                    "name": "max_blocks",
+                    "type": "uint32"
+                },
+                {
+                    "name": "current_blocks",
+                    "type": "uint32"
+                }
+            ]
+        },
+        {
+            "name": "stored_block_header",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pk",
+                    "type": "uint64"
+                },
+                {
+                    "name": "id",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "block_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "previous",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "action_mroot",
+                    "type": "checksum256"
+                }
+            ]
+        },
+        {
+            "name": "stored_block_header_state",
+            "base": "",
+            "fields": [
+                {
+                    "name": "pk",
+                    "type": "uint64"
+                },
+                {
+                    "name": "id",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "block_num",
+                    "type": "uint32"
+                },
+                {
+                    "name": "previous",
+                    "type": "checksum256"
+                },
+                {
+                    "name": "dpos_irreversible_blocknum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "bft_irreversible_blocknum",
+                    "type": "uint32"
+                },
+                {
+                    "name": "blockroot_merkle",
+                    "type": "bytes"
+                }
+            ]
+        },
+        {
+            "name": "stored_producer_schedule",
+            "base": "",
+            "fields": [
+                {
+                    "name": "producer_schedule",
+                    "type": "bytes"
+                }
+            ]
+        }
+    ],
+    "types": [],
+    "actions": [
+        {
+            "name": "addblock",
+            "type": "addblock",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "addblocks",
+            "type": "addblocks",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "cleanup",
+            "type": "cleanup",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "closechannel",
+            "type": "closechannel",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "dummy",
+            "type": "dummy",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "genproof",
+            "type": "genproof",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "icpaction",
+            "type": "icpaction",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "onpacket",
+            "type": "onpacket",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "onreceipt",
+            "type": "onreceipt",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "onreceiptend",
+            "type": "onreceiptend",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "openchannel",
+            "type": "openchannel",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "sendaction",
+            "type": "sendaction",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setmaxblocks",
+            "type": "setmaxblocks",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setmaxpackes",
+            "type": "setmaxpackes",
+            "ricardian_contract": ""
+        },
+        {
+            "name": "setpeer",
+            "type": "setpeer",
+            "ricardian_contract": ""
+        }
+    ],
+    "tables": [
+        {
+            "name": "icpmeter",
+            "type": "icp_meter",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "packets",
+            "type": "icp_packet",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "receipts",
+            "type": "icp_receipt",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "peer",
+            "type": "peer_contract",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "pendingsched",
+            "type": "pending_schedule",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "storemeter",
+            "type": "store_meter",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "block",
+            "type": "stored_block_header",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "blockstate",
+            "type": "stored_block_header_state",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        },
+        {
+            "name": "activesched",
+            "type": "stored_producer_schedule",
+            "index_type": "i64",
+            "key_names": [],
+            "key_types": []
+        }
+    ],
+    "ricardian_clauses": [],
+    "abi_extensions": []
+}
