@@ -10,7 +10,17 @@
 
 ## ICP Relay
 
+ICP中继作为nodeos的插件，可随nodeos节点部署。部署模式上有几点需要说明：
+- 不需要每个nodeos都开启ICP中继插件
+- 尽量多的nodeos开启ICP中继插件，将有助于保证跨链中继工作的不中断
+- 如果所有中继均瘫痪，将中断后续跨链交易进行，但不会影响已经发生的跨链交易；中继恢复后，将造成中断期某些跨链交易超时，但不会影响后续跨链交易的安全验证（这类似于所有nodeos节点瘫痪也会造成EOS区块链暂停）
+- 本端ICP中继可以连接对端多个ICP中继
+- 本端开启了ICP中继的nodeos之间可链内P2P互连(net_plugin/bnet_plugin)，但不可ICP的P2P互连(icp_relay_plugin)
+- 本端ICP中继插件负责向本端跨链合约查询或发送交易，但不能直接向对端跨链合约查询或发送交易，而只能借助于与对端ICP中继的P2P通信。
+
 ![ICP多中继P2P网络](./images/icp-multiple-relays.png)
+
+## ICP Network
 
 ## ICP Components
 
