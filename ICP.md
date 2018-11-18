@@ -30,8 +30,8 @@ ICP中继作为nodeos的插件，可随nodeos节点部署。部署模式上有�
 
 #### ICP Relay Plugin
 
-- [ICP Relay Plugin](https://github.com/eoscochain/eoscochain/tree/master/plugins/icp_relay_plugin): 
-- [ICP Relay API Plugin](https://github.com/eoscochain/eoscochain/tree/master/plugins/icp_relay_api_plugin):
+- [ICP Relay Plugin](https://github.com/eoscochain/eoscochain/tree/master/plugins/icp_relay_plugin)
+- [ICP Relay API Plugin](https://github.com/eoscochain/eoscochain/tree/master/plugins/icp_relay_api_plugin)
 
 #### ICP Contract
 
@@ -39,4 +39,21 @@ ICP中继作为nodeos的插件，可随nodeos节点部署。部署模式上有�
 
 #### ICP Token Contract
 
-- [ICP Token Contract](https://github.com/eoscochain/eoscochain/tree/master/contracts/icp.token)
+- [ICP Token Contract](https://github.com/eoscochain/eoscochain/tree/master/contracts/icp.token): 跨链资产转移合约，是跨链交易的典型应用示例。
+
+## ICP Testnet Setup
+
+目前ICP依然处于测试状态，不可用于生产环境。这里给出搭建ICP测试网的步骤。
+
+## ICP Challenges
+
+有待解决或优化的几个挑战：
+- 当向ICP合约一次性提交多个连续的区块头时，将因验证多个区块导致交易执行超时。
+  - 考虑优化减小验证计算量，实现一次交易中可验证数千连续区块。
+- nodeos的`fork_database`将删除LIB后的`block_header_state`，然而对端ICP合约可能在某个很靠后的时间需要某个区块高度的`block_header_state`（比如中继因不可控因素中断了某个时间段的区块头传送）。
+  - 考虑在ICP中继插件中实现缓存将来可能需要的`block_header_state`，甚至持久化到本地存储。
+- ICP合约中收到receipt后使用inline方式回调应用层合约的接口，如果inline action执行中报错，则造成ICP合约对此receipt的处理失败，这将导致receipt的顺序接受被打断。
+  - 考虑不要求receipt全局顺序，也就是可跳过失败的receipt处理。
+- ICP合约只能处理对端已经LIB的区块中包含的跨链交易，这导致跨链交易有两分多钟的延迟（对于EOS主链来说）。
+  - 考虑增强ICP合约中fork的处理，允许非LIB情况下的可回滚的跨链交易，但这要求应用层合约也能处理状态回滚。
+  - 考虑改进EOSIO的DPOS-BFT共识机制，使得LIB速度提升至秒级。
