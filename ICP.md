@@ -175,13 +175,6 @@ private key: # 这里填写私钥 5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79z
 
 #### 4. 部署系统合约和发行原生token
 
-设置原生token符号（**注意**：这是EOS Cochain的定制功能；如果是原生EOSIO，则需要在编译nodeos时指定）：
-```
-# 这里都设置为EOS
-cleos1 push action eosio setsymbol '["EOS"]' -p eosio
-cleos2 push action eosio setsymbol '["EOS"]' -p eosio
-```
-
 创建一些系统级账户：
 ```
 for a in eosio.token eosio.stake eosio.ram eosio.ramfee eosio.saving eosio.bpay eosio.vpay eosio.names eosio.msig; do cleos1 create account eosio $a EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV; done
@@ -193,6 +186,13 @@ for a in eosio.token eosio.stake eosio.ram eosio.ramfee eosio.saving eosio.bpay 
 ```
 cleos1 set contract eosio /path/to/contracts/eosio.bios/
 cleos2 set contract eosio /path/to/contracts/eosio.bios/
+```
+
+设置原生token符号（**注意**：这是EOS Cochain的定制功能；如果是原生EOSIO，则需要在编译nodeos时指定）：
+```
+# 这里都设置为EOS
+cleos1 push action eosio setsymbol '["EOS"]' -p eosio
+cleos2 push action eosio setsymbol '["EOS"]' -p eosio
 ```
 
 部署 `eosio.token` 合约：
@@ -301,7 +301,44 @@ cleos1 push action cochaintoken setcontracts '{"icp": "cochainioicp", "peer": "c
 cleos2 push action cochaintoken setcontracts '{"icp": "cochainioicp", "peer": "cochaintoken"}' -p cochaintoken
 ```
 
+设置 `icp.token` 的权限：
+
 #### 11. 跨链资产转移操作
+
+`icp.token` 合约可以跨链转移任何 `eosio.token` 合约兼容的token合约的资产。其使用 `[contract, symbol/precision, account]`来标识一笔跨链资产由哪个token合约发行、token符号和精度是多少、属于哪个账户。
+
+添加对端链向本端转移资产的信息（这里添加了系统原生合约，其实也可以添加任意多个第三方部署的token合约）：
+```
+cleos1 push action cochaintoken create '{"contract": "eosio.token", "symbol": "4,EOS"}' -p cochaintoken
+cleos2 push action cochaintoken create '{"contract": "eosio.token", "symbol": "4,EOS"}' -p cochaintoken
+```
+
+在生产环境中，此操作应该由BP多签执行。
+
+
+在每条链上各创建两个测试账户：
+```
+cleos1 system newaccount eosio cochainaaaaa EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10.0000 EOS" --stake-cpu "10.0000 EOS" --buy-ram-kbytes 8192
+cleos1 system newaccount eosio cochainbbbbb EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10.0000 EOS" --stake-cpu "10.0000 EOS" --buy-ram-kbytes 8192
+
+cleos2 system newaccount eosio cochainaaaaa EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10.0000 EOS" --stake-cpu "10.0000 EOS" --buy-ram-kbytes 8192
+cleos2 system newaccount eosio cochainbbbbb EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10.0000 EOS" --stake-cpu "10.0000 EOS" --buy-ram-kbytes 8192
+```
+
+给链1上的账户 `cochainaaaaa` 准备一些EOS：
+```
+cleos1 transfer eosio cochainaaaaa "1000.0000 EOS"
+```
+
+从链1上的账户 `cochainaaaaa` 向链1上的 `icp.token` 合约账户 `cochaintoken` 充值：
+```
+cleos1 transfer cochainaaaaa cochaintoken "10.0000 EOS"
+```
+
+从链1上的账户 `cochainaaaaa` 向链2上的账户 `cochainaaaaa` 跨链转移5个EOS，其中 `expiration` 填写：
+```
+cleos1 push action cochaintoken icptransfer '{"contract": "eosio.token", "from": "cochainaaaaa", "icp_to": "cochainaaaaa", "quantity": "5.0000 EOS", "memo": "icp transfer", "expiration": 1542030750}' -p cochainaaaaa
+```
 
 #### 12. 清理和关闭跨链通道
 
