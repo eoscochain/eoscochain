@@ -250,9 +250,36 @@ plugin = eosio::icp_relay_api_plugin
 
 #### 部署跨链合约
 
+部署ICP合约：
+```
+cleos1 set contract cochainioicp /path/to/contracts/icp
+cleos2 set contract cochainioicp /path/to/contracts/icp
+```
+
+向ICP合约设置对端ICP合约账户名：
+```
+cleos1 push action cochainioicp setpeer '{"peer": "cochainioicp"}' -p cochainioicp
+cleos2 push action cochainioicp setpeer '{"peer": "cochainioicp"}' -p cochainioicp
+```
+
 #### 开启跨链通道
 
+开启ICP通道，是部署ICP设施的最关键一步。即使在生产环境中，它也需要特权，选择每条链上合适的区块高度的区块头作为**信任种子**，然后经过各权威方审核，一致同意后才可后续部署使用此ICP通道的应用层合约。
+
+```
+# 暂时还没有将此接口定制入cleos，因此只能通过直接发送HTTP请求来开启ICP通道
+curl -v -H "Content-Type: application/json" -XPOST --data '{"seed_block_num_or_id": 80430}' http://127.0.0.1:8888/v1/icp/open_channel; curl -v -H "Content-Type: application/json" -XPOST --data '{"seed_block_num_or_id": 88360}' http://127.0.0.1:8889/v1/icp/open_channel;
+```
+
+其中对作为信任种子的区块头的选择，需遵循条件：`head_block_num - 500 < seed_block_num < head_block_num - 24`。上限是为了保证信任种子的`block_header_state`还没有被nodeos丢弃；下限是为了减少微分叉造成选择的区块被回滚。
+
+如果由于违反上述条件造成开启跨链通道失败，可重新选择区块高度进行重试。
+
+在生产环境中，开启ICP通道并经权威审核通过后，可以设置ICP合约账户的权限为 `eosio.prods@active`，这样后续对ICP合约的任何改动，都必须经过当前BP的多签。
+
 #### 观察跨链维持Dummy交易
+
+观察nodeos日志，可以看到区块头和跨链交易的传递。在没有应用层合约发送跨链交易的情况下，ICP中继插件将检测区块头累积数，如果超过设定阈值，则调用ICP合约的 `dummy` action，发送Dummy交易。这样可以使得ICP合约定期删除区块头，以避免过多区块头对RAM的占用。
 
 #### 部署跨链资产转移合约
 
@@ -270,7 +297,7 @@ cleos2 system newaccount eosio cochaintoken EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8
 在调测环境下，有时需要方便地重置跨链通道。
 
 ```
-# 关闭ICP通道，清除数据。其中max_num若为0，则一次性清除所有数据;若不为0，则最多只清除指定数目的数据，这主要用于当一次性清除数据导致交易超时的情况下采取分批次清除。
+# 关闭ICP通道，清除数据。其中max_num若为0，则一次性清除所有数据；若不为0，则最多只清除指定数目的数据，这主要用于当一次性清除数据导致交易超时的情况下采取分批次清除。
 cleos1 push action cochainioicp closechannel '{"clear_all": 1, "max_num": 0}' -p cochainioicp
 ```
 
