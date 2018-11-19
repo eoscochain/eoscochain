@@ -45,7 +45,116 @@ ICP中继作为nodeos的插件，可随nodeos节点部署。部署模式上有�
 
 目前ICP依然处于测试状态，不可用于生产环境。这里给出搭建ICP测试网的步骤。
 
+#### 编译安装EOS Cochain
+
+EOS Cochain默认集成了ICP组件，可以方便您快速搭建和测试ICP。
+
+**注意**：ICP并不需要针对EOSIO做太多定制，几乎仅将ICP跨链合约和跨链中继插件编译到EOSIO软件中即可启用ICP。
+
 #### 启动两条测试链
+
+在本地同时启动两条测试链，需要为他们新建各自的工作目录：
+```Bash
+mkdir ~/chain1
+mkdir ~/chain2
+```
+
+预启动测试链，生成创世区块：
+```Bash
+nodeos --config-dir /root/chain1/config --data-dir /root/chain1/data
+nodeos --config-dir /root/chain2/config --data-dir /root/chain2/data
+```
+
+
+退出nodeos，编辑生成的config.ini中的相关配置项。
+```INI
+# Override default WASM runtime (eosio::chain_plugin)
+wasm-runtime = wabt
+
+# print contract's output to console (eosio::chain_plugin)
+# 方便观察跨链合约打印信息
+contracts-console = true
+
+# The local IP and port to listen for incoming http connections; set blank to disable. (eosio::http_plugin)
+# 链1为127.0.0.1:8888，链2为127.0.0.1:8889
+http-server-address = 127.0.0.1:8888 # 或 127.0.0.1:8889
+
+# The endpoint upon which to listen for incoming connections (eosio::icp_relay_plugin)
+# 链1为0.0.0.0:8765，链2为0.0.0.0:8766
+icp-relay-endpoint = 0.0.0.0:8765 # 或 0.0.0.0:8766
+
+# The number of threads to use to process network messages (eosio::icp_relay_plugin)
+# icp-relay-threads = 
+
+# Remote endpoint of other node to connect to (may specify multiple times) (eosio::icp_relay_plugin)
+# 链1为127.0.0.1:8766，链2为127.0.0.1:8765；其实只要填一个，使得两条链的ICP插件能够连接上
+# icp-relay-connect = 127.0.0.1:8766 # 或 127.0.0.1:8765
+
+# The chain id of icp peer (eosio::icp_relay_plugin)
+# 链1填写链2的chain id，链2填写链1的chain id，可参考后文获取方式后再填写
+icp-relay-peer-chain-id = 630f427c3007b42929032bc02e5d6fded325b3e2caf592f963070381b2787a9d
+
+# The peer icp contract account name (eosio::icp_relay_plugin)
+# 对端ICP合约账户名；链1填写链2上跨链合约账户名，链2填写链1上跨链合约账户名
+icp-relay-peer-contract = cochainioicp
+
+# The local icp contract account name (eosio::icp_relay_plugin)
+# 本端ICP合约账户名；链1填写链1上跨链合约账户名，链2填写链2上跨链合约账户名
+icp-relay-local-contract = cochainioicp
+
+# The account and permission level to authorize icp transactions on local icp contract, as in 'account@permission' (eosio::icp_relay_plugin)
+# ICP插件向本端ICP合约发送交易时使用的账户名
+icp-relay-signer = cochainrelay@active
+
+# The actual host:port used to listen for incoming p2p connections. (eosio::net_plugin)
+# 链1为0.0.0.0:9876，链2为0.0.0.0:9877
+p2p-listen-endpoint = 0.0.0.0:9876 # 或 0.0.0.0:9877
+
+# Limits the maximum time (in milliseconds) that is allowed a pushed transaction's code to execute before being considered invalid (eosio::producer_plugin)
+# 设置足够大的最大交易执行时间，可参看ICP Challenges中关于计算量的说明
+max-transaction-time = 300
+
+# ID of producer controlled by this node (e.g. inita; may specify multiple times) (eosio::producer_plugin)
+# 这里测试链仅使用生产者eosio
+producer-name = eosio
+
+# 插件
+plugin = eosio::chain_api_plugin
+```
+
+编辑链1的cleos `/usr/local/bin/cleos1`:
+```
+#!/bin/bash
+
+cleos -u http://127.0.0.1:8888 "$@"
+```
+
+编辑链2的cleos `/usr/local/bin/cleos2`:
+```
+#!/bin/bash
+
+cleos -u http://127.0.0.1:8889 "$@"
+```
+
+添加可执行权限：
+```Bash
+chmod +x /usr/local/bin/cleos1
+chmod +x /usr/local/bin/cleos2
+```
+
+获取chain id：
+```Bash
+cleos1 get info
+cleos2 get info
+```
+
+再次编辑config.ini，启用ICP插件并重启nodeos：
+```INI
+plugin = eosio::icp_relay_plugin
+plugin = eosio::icp_relay_api_plugin
+```
+
+将链1的chain id填入链2的`config.ini`的`icp-relay-peer-chain-id`配置项中，将链2的chain id填入链1的`config.ini`中。
 
 #### 准备账户和权限
 
