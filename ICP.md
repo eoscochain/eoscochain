@@ -152,13 +152,7 @@ nodeos --config-dir /root/chain1/config --data-dir /root/chain1/data -e
 nodeos --config-dir /root/chain2/config --data-dir /root/chain2/data -e
 ```
 
-#### 准备账户和权限
-
-这里设置相关账户（其实不需要一样）：
-- 链1的ICP合约账户：cochainioicp
-- 链2的ICP合约账户：cochainioicp
-- 链1的ICP中继账户：cochainrelay
-- 链2的ICP中继账户：cochainrelay
+#### 准备钱包和私钥
 
 启动 `keosd` 进程，并设置较大的解锁时长（**生产环境千万别这么干**）：
 ```
@@ -188,6 +182,56 @@ cleos1 push action eosio setsymbol '["EOS"]' -p eosio
 cleos2 push action eosio setsymbol '["EOS"]' -p eosio
 ```
 
+创建一些系统级账户：
+```
+for a in eosio.token eosio.stake eosio.ram eosio.ramfee eosio.saving eosio.bpay eosio.vpay eosio.names eosio.msig; do cleos1 create account eosio $a EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV; done
+
+for a in eosio.token eosio.stake eosio.ram eosio.ramfee eosio.saving eosio.bpay eosio.vpay eosio.names eosio.msig; do cleos2 create account eosio $a EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV; done
+```
+
+部署 `eosio.bios` 合约：
+```
+cleos1 set contract eosio /path/to/contracts/eosio.bios/
+cleos2 set contract eosio /path/to/contracts/eosio.bios/
+```
+
+部署 `eosio.token` 合约：
+```
+cleos1 set contract eosio.token /path/to/contracts/eosio.token/
+cleos2 set contract eosio.token /path/to/contracts/eosio.token/
+```
+
+发行原生token：
+```
+cleos1 push action eosio.token create '["eosio", "10000000000.0000 EOS"]' -p eosio.token
+cleos1 push action eosio.token issue '["eosio", "1100001182.1000 EOS", "memo"]' -p eosio
+
+cleos2 push action eosio.token create '["eosio", "10000000000.0000 EOS"]' -p eosio.token
+cleos2 push action eosio.token issue '["eosio", "1100001182.1000 EOS", "memo"]' -p eosio
+```
+
+部署 `eosio.system` 合约：
+```
+cleos1 set contract eosio /path/to/contracts/eosio.system/
+cleos2 set contract eosio /path/to/contracts/eosio.system/
+```
+
+#### 准备账户和权限
+
+这里设置相关账户（其实不需要一样）：
+- 链1的ICP合约账户：`cochainioicp`
+- 链2的ICP合约账户：`cochainioicp`
+- 链1的ICP中继账户：`cochainrelay`
+- 链2的ICP中继账户：`cochainrelay`
+
+```
+cleos1 system newaccount eosio cochainioicp EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
+cleos1 system newaccount eosio cochainrelay EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
+
+cleos2 system newaccount eosio cochainioicp EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
+cleos2 system newaccount eosio cochainrelay EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
+```
+
 #### 部署跨链中继插件
 
 获取chain id：
@@ -212,6 +256,11 @@ plugin = eosio::icp_relay_api_plugin
 
 #### 部署跨链资产转移合约
 
+```
+cleos1 system newaccount eosio cochaintoken EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
+cleos2 system newaccount eosio cochaintoken EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
+```
+
 #### 跨链资产转移操作
 
 #### 清理和关闭跨链通道
@@ -219,6 +268,11 @@ plugin = eosio::icp_relay_api_plugin
 **注意：在生产环境中永远不要关闭跨链通道**，除非已经过审慎的链上治理决策同意以及必要的跨链状态结算工作。
 
 在调测环境下，有时需要方便地重置跨链通道。
+
+```
+# 关闭ICP通道，清除数据。其中max_num若为0，则一次性清除所有数据;若不为0，则最多只清除指定数目的数据，这主要用于当一次性清除数据导致交易超时的情况下采取分批次清除。
+cleos1 push action cochainioicp closechannel '{"clear_all": 1, "max_num": 0}' -p cochainioicp
+```
 
 ## ICP Challenges
 
