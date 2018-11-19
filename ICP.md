@@ -118,6 +118,9 @@ max-transaction-time = 300
 # 这里测试链仅使用生产者eosio
 producer-name = eosio
 
+# 填写账户eosio的公私钥，这里使用了默认值
+signature-provider = EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV=KEY:5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
+
 # 插件
 plugin = eosio::chain_api_plugin
 ```
@@ -126,14 +129,14 @@ plugin = eosio::chain_api_plugin
 ```
 #!/bin/bash
 
-cleos -u http://127.0.0.1:8888 "$@"
+cleos -u http://127.0.0.1:8888 --wallet-url unix://${HOME}/keosd/keosd.sock "$@"
 ```
 
 编辑链2的cleos `/usr/local/bin/cleos2`:
 ```
 #!/bin/bash
 
-cleos -u http://127.0.0.1:8889 "$@"
+cleos -u http://127.0.0.1:8889 --wallet-url unix://${HOME}/keosd/keosd.sock "$@"
 ```
 
 添加可执行权限：
@@ -142,23 +145,64 @@ chmod +x /usr/local/bin/cleos1
 chmod +x /usr/local/bin/cleos2
 ```
 
+启动两条链的 `nodeos`:
+```
+# 加上选项-e，使得可以生产区块
+nodeos --config-dir /root/chain1/config --data-dir /root/chain1/data -e
+nodeos --config-dir /root/chain2/config --data-dir /root/chain2/data -e
+```
+
+#### 准备账户和权限
+
+这里设置相关账户（其实不需要一样）：
+- 链1的ICP合约账户：cochainioicp
+- 链2的ICP合约账户：cochainioicp
+- 链1的ICP中继账户：cochainrelay
+- 链2的ICP中继账户：cochainrelay
+
+启动 `keosd` 进程，并设置较大的解锁时长（**生产环境千万别这么干**）：
+```
+keosd --unlock-timeout 999999999 --config-dir ~/keosd --data-dir ~/keosd --wallet-dir ~/keosd &
+```
+
+为方便测试，这里所有涉及的账户均使用相同的默认公私钥对（**生产环境千万别这么干**）：
+```
+EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV
+5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
+```
+
+创建钱包并导入私钥：
+```
+cleos1 wallet create --to-console
+
+cleos1 wallet import
+private key: # 这里填写私钥 5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
+```
+
+#### 部署系统合约和发行原生token
+
+设置原生token符号（**注意**：这是EOS Cochain的定制功能；如果是原生EOSIO，则需要在编译nodeos时指定）：
+```
+# 这里都设置为EOS
+cleos1 push action eosio setsymbol '["EOS"]' -p eosio
+cleos2 push action eosio setsymbol '["EOS"]' -p eosio
+```
+
+#### 部署跨链中继插件
+
 获取chain id：
 ```Bash
 cleos1 get info
 cleos2 get info
 ```
 
-再次编辑config.ini，启用ICP插件并重启nodeos：
+再次编辑 `config.ini`，启用ICP插件并重启 `nodeos`：
 ```INI
 plugin = eosio::icp_relay_plugin
 plugin = eosio::icp_relay_api_plugin
 ```
 
-将链1的chain id填入链2的`config.ini`的`icp-relay-peer-chain-id`配置项中，将链2的chain id填入链1的`config.ini`中。
-
-#### 准备账户和权限
-
-#### 部署跨链中继插件
+将链1的chain id填入链2的 `config.ini` 的 `icp-relay-peer-chain-id` 配置项中，将链2的chain id填入链1的 `config.ini` 中。
 
 #### 部署跨链合约
 
