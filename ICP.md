@@ -45,13 +45,13 @@ ICP中继作为nodeos的插件，可随nodeos节点部署。部署模式上有�
 
 目前ICP依然处于测试状态，不可用于生产环境。这里给出搭建ICP测试网的步骤。
 
-#### 编译安装EOS Cochain
+#### 1. 编译安装EOS Cochain
 
 EOS Cochain默认集成了ICP组件，可以方便您快速搭建和测试ICP。
 
 **注意**：ICP并不需要针对EOSIO做太多定制，几乎仅将ICP跨链合约和跨链中继插件编译到EOSIO软件中即可启用ICP。
 
-#### 启动两条测试链
+#### 2. 启动两条测试链
 
 在本地同时启动两条测试链，需要为他们新建各自的工作目录：
 ```Bash
@@ -152,7 +152,7 @@ nodeos --config-dir /root/chain1/config --data-dir /root/chain1/data -e
 nodeos --config-dir /root/chain2/config --data-dir /root/chain2/data -e
 ```
 
-#### 准备钱包和私钥
+#### 3. 准备钱包和私钥
 
 启动 `keosd` 进程，并设置较大的解锁时长（**生产环境千万别这么干**）：
 ```
@@ -173,7 +173,7 @@ cleos1 wallet import
 private key: # 这里填写私钥 5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3
 ```
 
-#### 部署系统合约和发行原生token
+#### 4. 部署系统合约和发行原生token
 
 设置原生token符号（**注意**：这是EOS Cochain的定制功能；如果是原生EOSIO，则需要在编译nodeos时指定）：
 ```
@@ -216,7 +216,7 @@ cleos1 set contract eosio /path/to/contracts/eosio.system/
 cleos2 set contract eosio /path/to/contracts/eosio.system/
 ```
 
-#### 准备账户和权限
+#### 5. 准备账户和权限
 
 这里设置相关账户（其实不需要一样）：
 - 链1的ICP合约账户：`cochainioicp`
@@ -232,7 +232,7 @@ cleos2 system newaccount eosio cochainioicp EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8
 cleos2 system newaccount eosio cochainrelay EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
 ```
 
-#### 部署跨链中继插件
+#### 6. 部署跨链中继插件
 
 获取chain id：
 ```Bash
@@ -248,7 +248,7 @@ plugin = eosio::icp_relay_api_plugin
 
 将链1的chain id填入链2的 `config.ini` 的 `icp-relay-peer-chain-id` 配置项中，将链2的chain id填入链1的 `config.ini` 中。
 
-#### 部署跨链合约
+#### 7. 部署跨链合约
 
 部署ICP合约：
 ```
@@ -262,7 +262,7 @@ cleos1 push action cochainioicp setpeer '{"peer": "cochainioicp"}' -p cochainioi
 cleos2 push action cochainioicp setpeer '{"peer": "cochainioicp"}' -p cochainioicp
 ```
 
-#### 开启跨链通道
+#### 8. 开启跨链通道
 
 开启ICP通道，是部署ICP设施的最关键一步。即使在生产环境中，它也需要特权，选择每条链上合适的区块高度的区块头作为**信任种子**，然后经过各权威方审核，一致同意后才可后续部署使用此ICP通道的应用层合约。
 
@@ -271,26 +271,39 @@ cleos2 push action cochainioicp setpeer '{"peer": "cochainioicp"}' -p cochainioi
 curl -v -H "Content-Type: application/json" -XPOST --data '{"seed_block_num_or_id": 80430}' http://127.0.0.1:8888/v1/icp/open_channel; curl -v -H "Content-Type: application/json" -XPOST --data '{"seed_block_num_or_id": 88360}' http://127.0.0.1:8889/v1/icp/open_channel;
 ```
 
-其中对作为信任种子的区块头的选择，需遵循条件：`head_block_num - 500 < seed_block_num < head_block_num - 24`。上限是为了保证信任种子的`block_header_state`还没有被nodeos丢弃；下限是为了减少微分叉造成选择的区块被回滚。
+其中对作为信任种子的区块头的选择，需遵循条件：`head_block_num - 500 <= seed_block_num <= head_block_num - 24`。上限是为了保证信任种子的`block_header_state`还没有被nodeos丢弃；下限是为了减少微分叉造成选择的区块被回滚。
 
 如果由于违反上述条件造成开启跨链通道失败，可重新选择区块高度进行重试。
 
 在生产环境中，开启ICP通道并经权威审核通过后，可以设置ICP合约账户的权限为 `eosio.prods@active`，这样后续对ICP合约的任何改动，都必须经过当前BP的多签。
 
-#### 观察跨链维持Dummy交易
+#### 9. 观察跨链维持Dummy交易
 
 观察nodeos日志，可以看到区块头和跨链交易的传递。在没有应用层合约发送跨链交易的情况下，ICP中继插件将检测区块头累积数，如果超过设定阈值，则调用ICP合约的 `dummy` action，发送Dummy交易。这样可以使得ICP合约定期删除区块头，以避免过多区块头对RAM的占用。
 
-#### 部署跨链资产转移合约
+#### 10. 部署跨链资产转移合约
 
+创建跨链资产转移合约的账户：
 ```
 cleos1 system newaccount eosio cochaintoken EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
 cleos2 system newaccount eosio cochaintoken EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
 ```
 
-#### 跨链资产转移操作
+部署跨链资产转移合约 `icp.token`：
+```
+cleos1 set contract cochaintoken /path/to/contracts/icp.token/
+cleos2 set contract cochaintoken /path/to/contracts/icp.token/
+```
 
-#### 清理和关闭跨链通道
+向 `icp.token` 合约设置 `icp` 合约账户名和对端 `icp.token` 合约账户名：
+```
+cleos1 push action cochaintoken setcontracts '{"icp": "cochainioicp", "peer": "cochaintoken"}' -p cochaintoken
+cleos2 push action cochaintoken setcontracts '{"icp": "cochainioicp", "peer": "cochaintoken"}' -p cochaintoken
+```
+
+#### 11. 跨链资产转移操作
+
+#### 12. 清理和关闭跨链通道
 
 **注意：在生产环境中永远不要关闭跨链通道**，除非已经过审慎的链上治理决策同意以及必要的跨链状态结算工作。
 
@@ -304,7 +317,8 @@ cleos1 push action cochainioicp closechannel '{"clear_all": 1, "max_num": 0}' -p
 ## ICP Challenges
 
 有待解决或优化的几个挑战：
-- 当向ICP合约一次性提交多个连续的区块头时，将因验证多个区块导致交易执行超时。
+- 当向ICP合约一次性提交多个连续的区块头时，将因验证多个区块导致交易执行超时：`3080004 tx_cpu_usage_exceeded: Transaction exceeded the current CPU usage limit imposed on the transaction
+                                          transaction was executing for too long`。
   - 考虑优化减小验证计算量，实现一次交易中可验证数千连续区块。
 - nodeos的`fork_database`将删除LIB后的`block_header_state`，然而对端ICP合约可能在某个很靠后的时间需要某个区块高度的`block_header_state`（比如中继因不可控因素中断了某个时间段的区块头传送）。
   - 考虑在ICP中继插件中实现缓存将来可能需要的`block_header_state`，甚至持久化到本地存储。
