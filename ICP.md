@@ -376,9 +376,15 @@ cleos1 transfer eosio cochainaaaaa "1000.0000 EOS"
 cleos1 transfer cochainaaaaa cochaintoken "10.0000 EOS"
 ```
 
-从链1上的账户 `cochainaaaaa` 向链2上的账户 `cochainaaaaa` 跨链转移5个EOS，其中 `expiration` 填写：
+从链1上的账户 `cochainaaaaa` 向链2上的账户 `cochainaaaaa` 跨链转移5个EOS：
 ```
 cleos1 push action cochaintoken icptransfer '{"contract": "eosio.token", "from": "cochainaaaaa", "icp_to": "cochainaaaaa", "quantity": "5.0000 EOS", "memo": "icp transfer", "expiration": 1542030750}' -p cochainaaaaa
+```
+
+其中超时时间 `expiration` 填写UNIX时间戳（秒数），可以如下生成：
+```
+# 这里设置超时时间为30分钟
+date -d "+30 minutes" +%s
 ```
 
 #### 12. 清理和关闭跨链通道
