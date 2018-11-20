@@ -224,6 +224,7 @@ cleos2 set contract eosio /path/to/contracts/eosio.system/
 - 链1的ICP中继账户：`cochainrelay`
 - 链2的ICP中继账户：`cochainrelay`
 
+创建账户：
 ```
 cleos1 system newaccount eosio cochainioicp EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
 cleos1 system newaccount eosio cochainrelay EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
@@ -231,6 +232,22 @@ cleos1 system newaccount eosio cochainrelay EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8
 cleos2 system newaccount eosio cochainioicp EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
 cleos2 system newaccount eosio cochainrelay EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV --transfer --stake-net "10000.0000 EOS" --stake-cpu "10000.0000 EOS" --buy-ram-kbytes 81920
 ```
+
+以下两步的权限设置，将允许 `icp` 合约账户可以内联调用自己的 `sendaction` 操作接口。
+
+将 `icp` 合约账户 `cochainioicp` 的权限 `sendaction` 授权为 `cochainioicp@eosio.code`：
+```
+cleos1 set account permission cochainioicp sendaction '{"threshold":1,"keys":[], "accounts": [{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}] }' "active" -p cochainioicp
+cleos2 set account permission cochainioicp sendaction '{"threshold":1,"keys":[], "accounts": [{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}] }' "active" -p cochainioicp
+```
+
+设置 `cochainioicp` 的 `sendaction` 权限可以调用 `cochainioicp` 的 `sendaction` 操作接口：
+```
+cleos1 set action permission cochainioicp cochainioicp sendaction sendaction -p cochainioicp
+cleos2 set action permission cochainioicp cochainioicp sendaction sendaction -p cochainioicp
+```
+
+如果要让应用层合约也能调用 `icp` 合约的 `sendaction` 操作接口，则需要进一步设置权限。参考后文 `icp.token` 合约的示例做法。
 
 #### 6. 部署跨链中继插件
 
@@ -301,7 +318,32 @@ cleos1 push action cochaintoken setcontracts '{"icp": "cochainioicp", "peer": "c
 cleos2 push action cochaintoken setcontracts '{"icp": "cochainioicp", "peer": "cochaintoken"}' -p cochaintoken
 ```
 
-设置 `icp.token` 的权限：
+前面提到设置 `icp` 合约的 `sendaction` 权限。这里为了让 `icp.token` 合约能够内联调用 `icp` 合约的 `sendaction` 操作接口，需要添加对 `icp.token@eosio.code` 的授权：
+```
+cleos1 set account permission cochainioicp sendaction '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}, {"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochainioicp@active
+cleos2 set account permission cochainioicp sendaction '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}, {"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochainioicp@active
+```
+
+将 `icp.token` 合约账户 `cochaintoken` 的权限 `callback` 授权为 `cochaintoken@eosio.code`：
+```
+cleos1 set account permission cochaintoken callback '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochaintoken
+cleos2 set account permission cochaintoken callback '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochaintoken
+```
+
+设置 `cochaintoken` 的 `callback` 权限可以调用 `cochaintoken` 的 `icpreceive`, `icpreceipt` 操作接口：
+```
+cleos1 set action permission cochaintoken cochaintoken icpreceive callback -p cochaintoken
+cleos1 set action permission cochaintoken cochaintoken icpreceipt callback -p cochaintoken
+
+cleos2 set action permission cochaintoken cochaintoken icpreceive callback -p cochaintoken
+cleos2 set action permission cochaintoken cochaintoken icpreceipt callback -p cochaintoken
+```
+
+为了让 `icp.token` 在内联调用自己操作接口的时候能够动用自己的 `active` 权限，需要授权 `cochaintoken@eosio.code`：
+```
+cleos1 set account permission cochaintoken active '{"threshold":1,"keys":[{"key":"EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV","weight":1}],"accounts":[{"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' -p cochaintoken@active
+cleos2 set account permission cochaintoken active '{"threshold":1,"keys":[{"key":"EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV","weight":1}],"accounts":[{"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' -p cochaintoken@active
+```
 
 #### 11. 跨链资产转移操作
 
@@ -314,7 +356,6 @@ cleos2 push action cochaintoken create '{"contract": "eosio.token", "symbol": "4
 ```
 
 在生产环境中，此操作应该由BP多签执行。
-
 
 在每条链上各创建两个测试账户：
 ```
