@@ -378,10 +378,61 @@ cleos1 transfer cochainaaaaa cochaintoken "10.0000 EOS"
 
 从链1上的账户 `cochainaaaaa` 向链2上的账户 `cochainaaaaa` 跨链转移5个EOS：
 ```
-cleos1 push action cochaintoken icptransfer '{"contract": "eosio.token", "from": "cochainaaaaa", "icp_to": "cochainaaaaa", "quantity": "5.0000 EOS", "memo": "icp transfer", "expiration": 1542030750}' -p cochainaaaaa
+cleos1 push action cochaintoken icptransfer '{"contract": "eosio.token", "from": "cochainaaaaa", "icp_to": "cochainaaaaa", "quantity": "5.0000 EOS", "memo": "", "expiration": 1542030750}' -p cochainaaaaa
 ```
 
-其中超时时间 `expiration` 填写UNIX时间戳（秒数），可以如下生成：
+从链2查询 `cochainaaaaa` 拥有的资产，可以看到跨链转移过来的5个EOS：
+```
+cleos2 get table cochaintoken eosio.token accounts
+# 输出：
+{
+  "rows": [{
+      "pk": 0,
+      "account": "cochainaaaaa",
+      "balance": "5.0000 EOS"
+    }
+  ],
+  "more": false
+}
+```
+
+从链2上的账户 `cochainaaaaa` 向链2上的账户 `cochainbbbbb` 转账3个EOS：
+```
+cleos2 push action cochaintoken transfer '{"contract": "eosio.token", "from": "cochainaaaaa", "to": "cochainbbbbb", "quantity": "3.0000 EOS", "memo": "", "expiration": 1542111402}' -p cochainaaaaa
+```
+
+从链2查询 `cochainbbbbb` 拥有的资产，为3个EOS：
+```
+cleos2 get table cochaintoken eosio.token accounts
+# 输出：
+{
+  "rows": [{
+      "pk": 0,
+      "account": "cochainaaaaa",
+      "balance": "2.0000 EOS"
+    },{
+      "pk": 1,
+      "account": "cochainbbbbb",
+      "balance": "3.0000 EOS"
+    }
+  ],
+  "more": false
+}
+```
+
+从链2上的账户 `cochainbbbbb` 赎回3个EOS到链1上的账户 `cochainbbbbb`：
+```
+cleos2 push action cochaintoken icprefund '{"contract": "eosio.token", "from": "cochainbbbbb", "icp_to": "cochainbbbbb", "quantity": "3.0000 EOS", "memo": "", "expiration": 1542113404}' -p cochainbbbbb
+```
+
+从链1查询 `cochainbbbbb` 拥有的资产，新增了3个EOS：
+```
+cleos1 get currency balance eosio.token cochainbbbbb
+# 输出：
+3.0000 EOS
+```
+
+上述跨链资产转移操作中，需要设置超时时间，这个超时时间其实是相对于对端链的超时时间。超时时间 `expiration` 填写UNIX时间戳（秒数），可以如下生成：
 ```
 # 这里设置超时时间为30分钟
 date -d "+30 minutes" +%s
