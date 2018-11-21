@@ -88,7 +88,7 @@ icp-relay-endpoint = 0.0.0.0:8765 # 或 0.0.0.0:8766
 
 # Remote endpoint of other node to connect to (may specify multiple times) (eosio::icp_relay_plugin)
 # 链1为127.0.0.1:8766，链2为127.0.0.1:8765；其实只要填一个，使得两条链的ICP插件能够连接上
-# icp-relay-connect = 127.0.0.1:8766 # 或 127.0.0.1:8765
+icp-relay-connect = 127.0.0.1:8766 # 或 127.0.0.1:8765
 
 # The chain id of icp peer (eosio::icp_relay_plugin)
 # 链1填写链2的chain id，链2填写链1的chain id，可参考后文获取方式后再填写
