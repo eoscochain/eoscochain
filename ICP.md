@@ -324,10 +324,10 @@ cleos1 set account permission cochainioicp sendaction '{"threshold":1,"keys":[],
 cleos2 set account permission cochainioicp sendaction '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}, {"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochainioicp@active
 ```
 
-将 `icp.token` 合约账户 `cochaintoken` 的权限 `callback` 授权为 `cochaintoken@eosio.code`：
+将 `icp.token` 合约账户 `cochaintoken` 的权限 `callback` 授权为 `cochainioicp@eosio.code`：
 ```
-cleos1 set account permission cochaintoken callback '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochaintoken
-cleos2 set account permission cochaintoken callback '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochaintoken","permission":"eosio.code"},"weight":1}] }' "active" -p cochaintoken
+cleos1 set account permission cochaintoken callback '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}] }' "active" -p cochaintoken
+cleos2 set account permission cochaintoken callback '{"threshold":1,"keys":[],"accounts":[{"permission":{"actor":"cochainioicp","permission":"eosio.code"},"weight":1}] }' "active" -p cochaintoken
 ```
 
 设置 `cochaintoken` 的 `callback` 权限可以调用 `cochaintoken` 的 `icpreceive`, `icpreceipt` 操作接口：
