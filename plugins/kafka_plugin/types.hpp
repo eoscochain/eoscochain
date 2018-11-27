@@ -73,6 +73,7 @@ struct Action {
     unsigned abi_seq;
 
     uint32_t block_num;
+    block_timestamp_type block_time;
     bytes tx_id; // the transaction that generated this action
 
     string console;

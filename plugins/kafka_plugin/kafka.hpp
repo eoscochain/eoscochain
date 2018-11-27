@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cppkafka/cppkafka.h>
 
 #include <eosio/chain_plugin/chain_plugin.hpp>
