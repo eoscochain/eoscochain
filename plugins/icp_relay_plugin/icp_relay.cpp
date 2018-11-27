@@ -439,7 +439,7 @@ void relay::on_irreversible_block(const block_state_ptr& s) {
    }
 
    icp_actions ia;
-   ia.block_header = static_cast<block_header>(s->header);
+   ia.block_header_instance = static_cast<block_header>(s->header);
    ia.action_digests = bit->action_digests;
 
    std::map<uint64_t, send_transaction_internal> packet_actions; // key is packet seq

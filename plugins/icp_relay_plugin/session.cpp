@@ -212,7 +212,7 @@ bool session::send_ping() {
    if (last_sent_ping_.code == fc::sha256()) {
       last_sent_ping_.sent = fc::time_point::now();
       last_sent_ping_.code = fc::sha256::hash(last_sent_ping_.sent); /// TODO: make this more random
-      last_sent_ping_.head = local_head_;
+      last_sent_ping_.head_instance = local_head_;
       send(last_sent_ping_);
       // wlog("send_ping");
    }
@@ -370,13 +370,13 @@ void session::on(const ping& p) {
 
    // wlog("on ping: ${v}", ("v", p.head.valid()));
 
-   if (not p.head.valid()) return;
+   if (not p.head_instance.valid()) return;
 
    app().get_io_service().post([=, self=shared_from_this()] {
       if (not relay_->peer_head_.valid()) {
          relay_->clear_cache_block_state();
       }
-      relay_->peer_head_ = p.head; // TODO: check validity
+      relay_->peer_head_ = p.head_instance; // TODO: check validity
    });
 }
 
@@ -402,13 +402,13 @@ void session::on(const channel_seed& s) {
 
 void session::on(const head_notice& h) {
    // wlog("recv head: ${v}", ("v", h.head.valid()));
-   if (not h.head.valid()) return;
+   if (not h.head_instance.valid()) return;
 
    app().get_io_service().post([=, self=shared_from_this()] {
       if (not relay_->peer_head_.valid()) {
          relay_->clear_cache_block_state();
       }
-      relay_->peer_head_ = h.head; // TODO: check validity
+      relay_->peer_head_ = h.head_instance; // TODO: check validity
    });
 }
 
@@ -447,14 +447,14 @@ void session::on(const block_header_with_merkle_path& b) {
 }
 
 void session::on(const icp_actions& ia) {
-   auto block_id = ia.block_header.id();
-   auto block_num = ia.block_header.block_num();
+   auto block_id = ia.block_header_instance.id();
+   auto block_num = ia.block_header_instance.block_num();
    recv_transaction rt{block_num, block_id, ia.start_packet_seq, ia.start_receipt_seq};
 
    auto ro = relay_->get_read_only_api();
    auto r = ro.get_block(read_only::get_block_params{block_id});
    if (r.block.is_null()) { // not exist
-      auto data = fc::raw::pack(bytes_data{fc::raw::pack(ia.block_header)});
+      auto data = fc::raw::pack(bytes_data{fc::raw::pack(ia.block_header_instance)});
       action a;
       a.name = ACTION_ADDBLOCK;
       a.data = data;
@@ -465,20 +465,20 @@ void session::on(const icp_actions& ia) {
       auto& s = p.second;
       action a;
       a.name = s.peer_action;
-      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action), fc::raw::pack(s.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action_instance), fc::raw::pack(s.action_receipt_instance), block_id, fc::raw::pack(ia.action_digests)});
       rt.packet_actions.emplace_back(p.first, a);
    }
    for (auto& r: ia.receipt_actions) {
       auto& s = r.second;
       action a;
       a.name = s.peer_action;
-      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action), fc::raw::pack(s.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(s.action_instance), fc::raw::pack(s.action_receipt_instance), block_id, fc::raw::pack(ia.action_digests)});
       rt.receipt_actions.emplace_back(r.first, a);
    }
    for (auto& c: ia.receiptend_actions) {
       action a;
       a.name = c.peer_action;
-      a.data = fc::raw::pack(icp_action{fc::raw::pack(c.action), fc::raw::pack(c.action_receipt), block_id, fc::raw::pack(ia.action_digests)});
+      a.data = fc::raw::pack(icp_action{fc::raw::pack(c.action_instance), fc::raw::pack(c.action_receipt_instance), block_id, fc::raw::pack(ia.action_digests)});
       rt.receiptend_actions.emplace_back(a);
    }
 

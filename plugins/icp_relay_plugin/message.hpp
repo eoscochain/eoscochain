@@ -86,7 +86,7 @@ struct hello {
 struct ping {
    fc::time_point sent;
    fc::sha256 code;
-   head head;
+   head head_instance;
 };
 struct pong {
    fc::time_point sent;
@@ -96,14 +96,14 @@ struct channel_seed {
    block_header_state seed;
 };
 struct head_notice {
-   head head;
+   head head_instance;
 };
 struct block_header_with_merkle_path {
    block_header_state block_header;
    vector<block_id_type> merkle_path;
 };
 struct icp_actions {
-   block_header block_header;
+   block_header block_header_instance;
    vector<digest_type> action_digests;
 
    uint64_t start_packet_seq = 0;
@@ -156,13 +156,13 @@ namespace std {
 }
 
 FC_REFLECT(icp::hello, (id)(chain_id)(contract)(peer_contract))
-FC_REFLECT(icp::ping, (sent)(code)(head))
+FC_REFLECT(icp::ping, (sent)(code)(head_instance))
 FC_REFLECT(icp::pong, (sent)(code))
 FC_REFLECT(icp::channel_seed, (seed))
-FC_REFLECT(icp::head_notice, (head))
+FC_REFLECT(icp::head_notice, (head_instance))
 FC_REFLECT(icp::block_header_with_merkle_path, (block_header)(merkle_path))
-FC_REFLECT(icp::send_transaction_internal, (peer_action)(action)(action_receipt))
-FC_REFLECT(icp::icp_actions, (block_header)(action_digests)(start_packet_seq)(start_receipt_seq)(packet_actions)(receipt_actions)(receiptend_actions))
+FC_REFLECT(icp::send_transaction_internal, (peer_action)(action_instance)(action_receipt_instance))
+FC_REFLECT(icp::icp_actions, (block_header_instance)(action_digests)(start_packet_seq)(start_receipt_seq)(packet_actions)(receipt_actions)(receiptend_actions))
 FC_REFLECT(icp::packet_receipt_request, (packet_seq)(receipt_seq)(finalised_receipt))
 
 FC_REFLECT(icp::icp_action, (action)(action_receipt)(block_id)(merkle_path))
