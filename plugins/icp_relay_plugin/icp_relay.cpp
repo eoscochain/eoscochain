@@ -361,8 +361,9 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
       pending_schedule_version_ = 0; // reset
    }
 
-   for (auto& t: s->trxs) {
-      auto it = send_transactions_.find(t->id);
+   for (auto& t: s->block->transactions) {
+      auto id = t.trx.contains<transaction_id_type>() ? t.trx.get<transaction_id_type>() : t.trx.get<packed_transaction>().id();
+      auto it = send_transactions_.find(id);
       if (it != send_transactions_.end()) {
          may_send = true;
 
@@ -402,8 +403,9 @@ void relay::on_accepted_block(const block_state_with_action_digests_ptr& b) {
 
 void relay::on_irreversible_block(const block_state_ptr& s) {
    vector<send_transaction> txs;
-   for (auto& t: s->trxs) {
-      auto it = send_transactions_.find(t->id);
+   for (auto& t: s->block->transactions) {
+      auto id = t.trx.contains<transaction_id_type>() ? t.trx.get<transaction_id_type>() : t.trx.get<packed_transaction>().id();
+      auto it = send_transactions_.find(id);
       if (it != send_transactions_.end()) txs.push_back(*it);
    }
 
