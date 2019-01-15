@@ -453,7 +453,7 @@ void session::on(const icp_actions& ia) {
 
    auto ro = relay_->get_read_only_api();
    auto r = ro.get_block(read_only::get_block_params{block_id});
-   if (r.block.is_null()) { // not exist
+   if (r.block.is_null() or r.block["action_mroot"].as<fc::sha256>() == fc::sha256()) { // not exist or has no `action_mroot`
       auto data = fc::raw::pack(bytes_data{fc::raw::pack(ia.block_header_instance)});
       action a;
       a.name = ACTION_ADDBLOCK;
