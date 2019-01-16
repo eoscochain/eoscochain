@@ -24,17 +24,20 @@ void fork_store::validate_block_state(const block_header_state& h) {
 
     auto by_blockid = _block_states.get_index<N(blockid)>();
     eosio_assert(by_blockid.find(to_key256(h.id)) == by_blockid.end(), "already existing block");
-    eosio_assert(is_producer(h.header.producer, h.block_signing_key), "invalid producer");
+
+    // Comment out, since producer may not be found when schedule changed
+    // eosio_assert(is_producer(h.header.producer, h.block_signing_key), "invalid producer");
+
     auto previous_block_num = block_header::num_from_id(h.header.previous);
     eosio_assert(previous_block_num + 1 == h.block_num, "unlinkable block");
 
     auto prokey = h.get_scheduled_producer(h.header.timestamp);
-    eosio_assert(prokey.producer_name == h.header.producer, "invalid producer");
-    eosio_assert(prokey.block_signing_key == h.block_signing_key, "invalid producer");
+    eosio_assert(prokey.producer_name == h.header.producer, "invalid producer name");
+    eosio_assert(prokey.block_signing_key == h.block_signing_key, "invalid producer key");
     auto iter = std::find_if(h.active_schedule.producers.cbegin(), h.active_schedule.producers.cend(), [&](const producer_key& p) {
        return p.producer_name == h.header.producer;
     });
-    eosio_assert(iter != h.active_schedule.producers.cend(), "invalid producer");
+    eosio_assert(iter != h.active_schedule.producers.cend(), "producer not found in active schedule");
 
     eosio_assert(h.calc_dpos_last_irreversible() == h.dpos_irreversible_blocknum, "invalid dpos irreversible block num");
 
@@ -87,7 +90,8 @@ void fork_store::add_block_header_with_merkle_path(const block_header_state& h, 
         eosio_assert(sha256(h.active_schedule) == sha256(pending_schedule), "mismatched schedule");
 
         eosio_assert(h.pending_schedule_hash == sha256(h.active_schedule), "invalid new producers");
-        eosio_assert(h.active_schedule.version + 1 == h.pending_schedule.version, "invalid producer schedule version");
+        eosio_assert(h.active_schedule.version == h.pending_schedule.version, "inconsistent producer schedule version");
+        eosio_assert(current_producer_schedule.version + 1 == h.pending_schedule.version, "invalid producer schedule version");
         eosio_assert(h.dpos_irreversible_blocknum >= h.pending_schedule_lib_num, "changed producer schedule before irreversible");
         eosio_assert(h.dpos_irreversible_blocknum <= h.pending_schedule_lib_num + 12, "changed producer schedule too late"); // TODO: 12?
 

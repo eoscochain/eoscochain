@@ -4,6 +4,8 @@
 
 #include "icp.hpp"
 
+typedef unsigned __int128 uint128_t;
+
 namespace eosio {
 
 using eosio::multi_index;
