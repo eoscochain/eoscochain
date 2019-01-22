@@ -33,7 +33,7 @@ namespace eosio { namespace chain {
          account_name                  payer;
          time_point                    delay_until; /// this generated transaction will not be applied until the specified time
          time_point                    expiration; /// this generated transaction will not be applied after this time
-         time_point                    published;
+         time_point                    published; /// when generated
          shared_blob                   packed_trx;
 
          uint32_t set( const transaction& trx ) {

@@ -1071,7 +1071,7 @@ struct controller_impl {
                                                     : transaction_receipt::delayed;
                trace->receipt = push_receipt(trx->packed_trx, s, trx_context.billed_cpu_time_us, trace->net_usage);
                pending->_pending_block_state->trxs.emplace_back(trx);
-            } else {
+            } else { // implicit transaction won't be pushed into block
                transaction_receipt_header r;
                r.status = transaction_receipt::executed;
                r.cpu_usage_us = trx_context.billed_cpu_time_us;
@@ -1243,7 +1243,7 @@ struct controller_impl {
             }
 
             bool transaction_failed =  trace && trace->except;
-            bool transaction_can_fail = receipt.status == transaction_receipt_header::hard_fail && receipt.trx.contains<transaction_id_type>();
+            bool transaction_can_fail = receipt.status == transaction_receipt_header::hard_fail && receipt.trx.contains<transaction_id_type>(); // only deferred transaction can be failed, i.e., `hard_fail`
             if( transaction_failed && !transaction_can_fail) {
                edump((*trace));
                throw *trace->except;

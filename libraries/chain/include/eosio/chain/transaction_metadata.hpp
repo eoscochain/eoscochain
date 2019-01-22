@@ -21,8 +21,8 @@ class transaction_metadata {
       packed_transaction                                         packed_trx;
       optional<pair<chain_id_type, flat_set<public_key_type>>>   signing_keys;
       std::future<pair<chain_id_type,flat_set<public_key_type>>> signing_keys_future;
-      bool                                                       accepted = false;
-      bool                                                       implicit = false;
+      bool                                                       accepted = false; // indicate whether the `accepted_transaction` has been called
+      bool                                                       implicit = false; // only true for `on_block` transaction
       bool                                                       scheduled = false;
 
       explicit transaction_metadata( const signed_transaction& t, packed_transaction::compression_type c = packed_transaction::none )
