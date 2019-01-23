@@ -246,7 +246,8 @@ void relay::update_local_head(bool force) {
 }
 
 void relay::on_applied_transaction(const transaction_trace_ptr& t) {
-   if (send_transactions_.find(t->id) != send_transactions_.end()) return; // has been handled
+   // if (send_transactions_.find(t->id) != send_transactions_.end()) return; // has been handled
+   // TODO: deduplicate
 
    send_transaction st{t->id, t->block_num};
 
