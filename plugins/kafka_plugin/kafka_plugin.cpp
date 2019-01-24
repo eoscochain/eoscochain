@@ -52,6 +52,7 @@ void kafka_plugin::set_program_options(options_description&, options_description
             ("kafka-request-required-acks", bpo::value<int>()->default_value(1), "Kafka indicates how many acknowledgements the leader broker must receive from ISR brokers before responding to the request: 0=Broker does not send any response/ack to client, 1=Only the leader broker will need to ack the message, -1=broker will block until message is committed by all in sync replicas (ISRs) or broker's min.insync.replicas setting before sending response")
             ("kafka-message-send-max-retries", bpo::value<unsigned>()->default_value(2), "Kafka how many times to retry sending a failing MessageSet")
             ("kafka-start-block-num", bpo::value<unsigned>()->default_value(1), "Kafka starts syncing from which block number")
+            ("kafka-only-irreversible-blocks", bpo::value<bool>()->default_value(false), "Kafka only sync irreversible blocks")
             ("kafka-statistics-interval-ms", bpo::value<unsigned>()->default_value(0), "Kafka statistics emit interval, maximum is 86400000, 0 disables statistics")
             ("kafka-fixed-partition", bpo::value<int>()->default_value(-1), "Kafka specify fixed partition for all topics, -1 disables specify")
             ;
@@ -114,12 +115,15 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
 
     unsigned start_block_num = options.at("kafka-start-block-num").as<unsigned>();
+    bool only_irreversible_blocks = options.at("kafka-only-irreversible-blocks").as<bool>();
 
     // add callback to chain_controller config
     chain_plugin_ = app().find_plugin<chain_plugin>();
     auto& chain = chain_plugin_->chain();
 
     block_conn_ = chain.accepted_block.connect([=](const chain::block_state_ptr& b) {
+        if (only_irreversible_blocks) return;
+
         if (not start_sync_) {
             if (b->block_num >= start_block_num) start_sync_ = true;
             else return;
