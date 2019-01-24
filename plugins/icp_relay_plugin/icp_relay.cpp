@@ -314,7 +314,13 @@ void relay::on_applied_transaction(const transaction_trace_ptr& t) {
 
    if (st.empty()) return;
 
-   send_transactions_.insert(st);
+
+   auto it = send_transactions_.find(t->id);
+   if (it != send_transactions_.end()) {
+      send_transactions_.replace(it, st);
+   } else {
+      send_transactions_.insert(st);
+   }
 }
 
 void relay::clear_cache_block_state() {
