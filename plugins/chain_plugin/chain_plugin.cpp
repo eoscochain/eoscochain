@@ -1522,6 +1522,16 @@ fc::variant read_only::get_block(const read_only::get_block_params& params) cons
            ("ref_block_prefix", ref_block_prefix);
 }
 
+vector<fc::variant> read_only::get_blocks(const get_blocks_params& params) const {
+   vector<fc::variant> result;
+   result.reserve(params.block_num_or_id_list.size());
+   for (auto& block_num_or_id: params.block_num_or_id_list) {
+      auto b = get_block(get_block_params{block_num_or_id});
+      result.push_back(fc::move(b));
+   }
+   return result;
+}
+
 fc::variant read_only::get_block_header_state(const get_block_header_state_params& params) const {
    block_state_ptr b;
    optional<uint64_t> block_num;

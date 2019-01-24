@@ -2033,6 +2033,15 @@ int main( int argc, char** argv ) {
       }
    });
 
+   // get blocks
+   vector<string> block_list;
+   auto getBlocks = get->add_subcommand("blocks", localized("Retrieve a list of full blocks from the blockchain"), false);
+   getBlocks->add_option("blocks", block_list, localized("The list of number or ID of the blocks to retrieve"))->required();
+   getBlocks->set_callback([&block_list] {
+      fc::variant arg = fc::mutable_variant_object("block_num_or_id_list", block_list);
+      std::cout << fc::json::to_pretty_string(call(get_blocks_func, arg)) << std::endl;
+   });
+
    // get account
    string accountName;
    string coresym;
