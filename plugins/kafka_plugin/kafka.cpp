@@ -1,5 +1,6 @@
 #include "kafka.hpp"
 
+#include <eosio/chain/config.hpp>
 #include <fc/io/json.hpp>
 
 #include "try_handle.hpp"
@@ -95,6 +96,7 @@ std::pair<uint32_t, uint32_t> kafka::push_transaction(const chain::transaction_r
     auto t = std::make_shared<Transaction>();
     if(tx_receipt.trx.contains<transaction_id_type>()) {
         t->id = checksum_bytes(tx_receipt.trx.get<transaction_id_type>());
+        // deferred transaction's actions (maybe context free) are counted in the original initiation transaction
     } else {
         auto signed_tx = tx_receipt.trx.get<chain::packed_transaction>().get_signed_transaction();
         t->id = checksum_bytes(signed_tx.id());
@@ -112,6 +114,14 @@ std::pair<uint32_t, uint32_t> kafka::push_transaction(const chain::transaction_r
 }
 
 void kafka::push_transaction_trace(const chain::transaction_trace_ptr& tx_trace) {
+    // bypass `onblock` transaction
+    if (not tx_trace->action_traces.empty()) {
+        const auto& first = tx_trace->action_traces.front().act;
+        if (first.account == chain::config::system_account_name and first.name == N(onblock)) {
+            return;
+        }
+    }
+
     auto t = std::make_shared<TransactionTrace>();
 
     t->id = checksum_bytes(tx_trace->id);
