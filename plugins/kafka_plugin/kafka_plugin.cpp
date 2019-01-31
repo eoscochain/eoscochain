@@ -42,17 +42,13 @@ void kafka_plugin::set_program_options(options_description&, options_description
     cfg.add_options()
             ("kafka-enable", bpo::value<bool>(), "Kafka enable")
             ("kafka-broker-list", bpo::value<string>()->default_value("127.0.0.1:9092"), "Kafka initial broker list, formatted as comma separated pairs of host or host:port, e.g., host1:port1,host2:port2")
-            ("kafka-block-topic", bpo::value<string>()->default_value("eos.blocks"), "Kafka topic for message `block`")
-            ("kafka-transaction-topic", bpo::value<string>()->default_value("eos.txs"), "Kafka topic for message `transaction`")
-            ("kafka-transaction-trace-topic", bpo::value<string>()->default_value("eos.txtraces"), "Kafka topic for message `transaction_trace`")
-            ("kafka-action-topic", bpo::value<string>()->default_value("eos.actions"), "Kafka topic for message `action`")
+            ("kafka-topic", bpo::value<string>()->default_value("eos"), "Kafka topic for message")
             ("kafka-batch-num-messages", bpo::value<unsigned>()->default_value(1024), "Kafka minimum number of messages to wait for to accumulate in the local queue before sending off a message set")
             ("kafka-queue-buffering-max-ms", bpo::value<unsigned>()->default_value(500), "Kafka how long to wait for kafka-batch-num-messages to fill up in the local queue")
             ("kafka-compression-codec", bpo::value<compression_codec>()->value_name("none/gzip/snappy/lz4"), "Kafka compression codec to use for compressing message sets, default is snappy")
             ("kafka-request-required-acks", bpo::value<int>()->default_value(1), "Kafka indicates how many acknowledgements the leader broker must receive from ISR brokers before responding to the request: 0=Broker does not send any response/ack to client, 1=Only the leader broker will need to ack the message, -1=broker will block until message is committed by all in sync replicas (ISRs) or broker's min.insync.replicas setting before sending response")
             ("kafka-message-send-max-retries", bpo::value<unsigned>()->default_value(2), "Kafka how many times to retry sending a failing MessageSet")
             ("kafka-start-block-num", bpo::value<unsigned>()->default_value(1), "Kafka starts syncing from which block number")
-            ("kafka-only-irreversible-blocks", bpo::value<bool>()->default_value(false), "Kafka only sync irreversible blocks")
             ("kafka-statistics-interval-ms", bpo::value<unsigned>()->default_value(0), "Kafka statistics emit interval, maximum is 86400000, 0 disables statistics")
             ("kafka-fixed-partition", bpo::value<int>()->default_value(-1), "Kafka specify fixed partition for all topics, -1 disables specify")
             ;
@@ -103,27 +99,19 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
         });
     }
     kafka_->set_config(config);
-    kafka_->set_topics(
-            options.at("kafka-block-topic").as<string>(),
-            options.at("kafka-transaction-topic").as<string>(),
-            options.at("kafka-transaction-trace-topic").as<string>(),
-            options.at("kafka-action-topic").as<string>()
-    );
+    kafka_->set_topic(options.at("kafka-topic").as<string>());
 
     if (options.at("kafka-fixed-partition").as<int>() >= 0) {
         kafka_->set_partition(options.at("kafka-fixed-partition").as<int>());
     }
 
     unsigned start_block_num = options.at("kafka-start-block-num").as<unsigned>();
-    bool only_irreversible_blocks = options.at("kafka-only-irreversible-blocks").as<bool>();
 
     // add callback to chain_controller config
     chain_plugin_ = app().find_plugin<chain_plugin>();
     auto& chain = chain_plugin_->chain();
 
     block_conn_ = chain.accepted_block.connect([=](const chain::block_state_ptr& b) {
-        if (only_irreversible_blocks) return;
-
         if (not start_sync_) {
             if (b->block_num >= start_block_num) start_sync_ = true;
             else return;
