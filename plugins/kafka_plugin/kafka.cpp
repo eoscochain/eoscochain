@@ -204,9 +204,15 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                 case N(setabi): {
                     const auto setabi = action_trace.act.data_as<chain::setabi>();
                     auto &chain = app().find_plugin<chain_plugin>()->chain();
-                    const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(
-                       setabi.account);
+                    const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setabi.account);
                     a->extra = fc::json::to_string(account_sequence.abi_sequence, fc::json::legacy_generator);
+                    break;
+                }
+                case N(setcode): {
+                    const auto setcode = action_trace.act.data_as<chain::setcode>();
+                    auto &chain = app().find_plugin<chain_plugin>()->chain();
+                    const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setcode.account);
+                    a->extra = fc::json::to_string(account_sequence.code_sequence, fc::json::legacy_generator);
                     break;
                 }
                 case N(canceldelay): {
