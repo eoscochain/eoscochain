@@ -40,6 +40,12 @@ struct rmvproducer {
    name producer;
 };
 
+struct issue {
+   name to;
+   asset quantity;
+   string memo;
+};
+
 struct transfer {
    name from;
    name to;
@@ -55,4 +61,5 @@ FC_REFLECT(kafka::sellram, (receiver)(bytes))
 FC_REFLECT(kafka::regproducer, (producer)(producer_key)(url)(location))
 FC_REFLECT(kafka::unregprod, (producer))
 FC_REFLECT(kafka::rmvproducer, (producer))
+FC_REFLECT(kafka::issue, (to)(quantity)(memo))
 FC_REFLECT(kafka::transfer, (from)(to)(quantity)(memo))

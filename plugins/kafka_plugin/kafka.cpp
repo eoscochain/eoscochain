@@ -176,6 +176,7 @@ void kafka::push_transaction_trace(const chain::transaction_trace_ptr& tx_trace)
     }
 }
 
+
 void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent_seq) {
     auto a = std::make_shared<Action>();
 
@@ -196,21 +197,21 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     if (not action_trace.console.empty()) a->console = action_trace.console;
 
     // get any extra data
-    {
+    if (a->account == a->receiver) {
         const auto& data = action_trace.act.data;
 
         if (a->account == N(eosio)) {
             switch (a->name) {
                 case N(setabi): {
                     const auto setabi = action_trace.act.data_as<chain::setabi>();
-                    auto &chain = app().find_plugin<chain_plugin>()->chain();
+                    auto& chain = app().find_plugin<chain_plugin>()->chain();
                     const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setabi.account);
                     a->extra = fc::json::to_string(account_sequence.abi_sequence, fc::json::legacy_generator);
                     break;
                 }
                 case N(setcode): {
                     const auto setcode = action_trace.act.data_as<chain::setcode>();
-                    auto &chain = app().find_plugin<chain_plugin>()->chain();
+                    auto& chain = app().find_plugin<chain_plugin>()->chain();
                     const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setcode.account);
                     a->extra = fc::json::to_string(account_sequence.code_sequence, fc::json::legacy_generator);
                     break;
@@ -235,10 +236,18 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     break;
                 }
             }
-        } else if (a->name == N(transfer)) {
+        } else if (a->name == N(issue) and is_token(a->account)) {
             try {
-                const auto t = fc::raw::unpack<transfer>(data);
-                a->extra = fc::json::to_string(t, fc::json::legacy_generator); // just indicates a token transfer action
+                const auto issue_data = fc::raw::unpack<issue>(data);
+                a->extra = fc::json::to_string(issue_data, fc::json::legacy_generator);
+            } catch (...) {
+                // ignore any error of unpack
+            }
+        } else if (a->name == N(transfer) and is_token(a->account)) {
+            try {
+                const auto transfer_data = fc::raw::unpack<transfer>(data);
+                // TODO: get table row
+                a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
             } catch (...) {
                 // ignore any error of unpack
             }
@@ -250,6 +259,73 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     for (auto& inline_trace: action_trace.inline_traces) {
         push_action(inline_trace, action_trace.receipt.global_sequence);
     }
+}
+
+bool kafka::is_token(name account) {
+    if (cached_tokens_.count(account)) return true;
+
+    auto plugin = app().find_plugin<chain_plugin>();
+    auto& chain = plugin->chain();
+    auto abi_serializer = chain.get_abi_serializer(account, plugin->get_abi_serializer_max_time());
+    EOS_ASSERT(bool(abi_serializer), chain::abi_exception, "invalid abi for account ${account}", ("account", account));
+
+    auto stat_name = abi_serializer->get_table_type(N(stat));
+    if (stat_name.empty()) return false;
+    auto stat_struct = abi_serializer->get_struct(stat_name);
+    static const vector<chain::field_def> stat_fields{
+       {"supply", "asset"}, {"max_supply", "asset"}, {"issuer", "account_name"}
+    };
+    if (not std::equal(stat_struct.fields.cbegin(),
+                       stat_struct.fields.cend(),
+                       stat_fields.cbegin(),
+                       stat_fields.cend())) {
+        return false;
+    }
+
+    auto accounts_name = abi_serializer->get_table_type(N(accounts));
+    if (accounts_name.empty()) return false;
+    auto accounts_struct = abi_serializer->get_struct(accounts_name);
+    static const vector<chain::field_def> accounts_fields{
+       {"balance", "asset"}
+    };
+    if (not std::equal(accounts_struct.fields.cbegin(),
+                       accounts_struct.fields.cend(),
+                       accounts_fields.cbegin(),
+                       accounts_fields.cend())) {
+        return false;
+    }
+
+    auto issue_name = abi_serializer->get_table_type(N(issue));
+    if (issue_name.empty()) return false;
+    auto issue_struct = abi_serializer->get_struct(issue_name);
+    static const vector<chain::field_def> issue_fields{
+       {"balance", "asset"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+    };
+    if (not std::equal(issue_struct.fields.cbegin(),
+                       issue_struct.fields.cend(),
+                       issue_fields.cbegin(),
+                       issue_fields.cend())) {
+        return false;
+    }
+
+    auto transfer_name = abi_serializer->get_table_type(N(transfer));
+    if (transfer_name.empty()) return false;
+    auto transfer_struct = abi_serializer->get_struct(transfer_name);
+    static const vector<chain::field_def> transfer_fields{
+       {"from", "account_name"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+    };
+    if (not std::equal(transfer_struct.fields.cbegin(),
+                       transfer_struct.fields.cend(),
+                       transfer_fields.cbegin(),
+                       transfer_fields.cend())) {
+        return false;
+    }
+
+    if (cached_tokens_.size() > 1000000) cached_tokens_.clear(); // avoid memory overflow
+
+    cached_tokens_.insert(account);
+
+    return true;
 }
 
 }

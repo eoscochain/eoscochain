@@ -27,6 +27,8 @@ public:
     void push_action(const chain::action_trace& action_trace, uint64_t parent_seq);
 
 private:
+    bool is_token(name account);
+
     Configuration config_;
     string topic_;
 
@@ -36,6 +38,8 @@ private:
 
     std::unordered_map<transaction_id_type, chain::transaction_trace_ptr> cached_traces_;
     std::unordered_map<transaction_id_type, vector<ActionPtr>> cached_actions_;
+
+    std::unordered_set<name> cached_tokens_;
 };
 
 }
