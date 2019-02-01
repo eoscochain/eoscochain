@@ -1,6 +1,6 @@
 file(GLOB HEADERS "*.hpp")
 add_library(kafka_plugin
-        kafka_plugin.cpp kafka.cpp try_handle.cpp
+        kafka_plugin.cpp kafka.cpp try_handle.cpp exchange_state.cpp
         ${HEADERS})
 
 find_package(Cppkafka)

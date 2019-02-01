@@ -40,6 +40,11 @@ struct rmvproducer {
    name producer;
 };
 
+struct create {
+   name issuer;
+   asset maximum_supply;
+};
+
 struct issue {
    name to;
    asset quantity;
@@ -53,6 +58,12 @@ struct transfer {
    string memo;
 };
 
+struct ram_deal {
+   uint64_t global_seq;
+   int64_t bytes; // positive: buy; negative: sell
+   asset quantity;
+};
+
 }
 
 FC_REFLECT(kafka::buyram, (buyer)(receiver)(tokens))
@@ -61,5 +72,7 @@ FC_REFLECT(kafka::sellram, (receiver)(bytes))
 FC_REFLECT(kafka::regproducer, (producer)(producer_key)(url)(location))
 FC_REFLECT(kafka::unregprod, (producer))
 FC_REFLECT(kafka::rmvproducer, (producer))
+FC_REFLECT(kafka::create, (issuer)(maximum_supply))
 FC_REFLECT(kafka::issue, (to)(quantity)(memo))
 FC_REFLECT(kafka::transfer, (from)(to)(quantity)(memo))
+FC_REFLECT(kafka::ram_deal, (global_seq)(bytes)(quantity))

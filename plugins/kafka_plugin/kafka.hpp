@@ -6,6 +6,7 @@
 #include <eosio/chain_plugin/chain_plugin.hpp>
 
 #include "types.hpp"
+#include "actions.hpp"
 
 namespace kafka {
 
@@ -40,6 +41,8 @@ private:
     std::unordered_map<transaction_id_type, vector<ActionPtr>> cached_actions_;
 
     std::unordered_set<name> cached_tokens_;
+
+    std::unordered_map<uint64_t, ram_deal> cached_ram_deals_;
 };
 
 }

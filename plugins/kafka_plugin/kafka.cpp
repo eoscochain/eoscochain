@@ -176,6 +176,7 @@ void kafka::push_transaction_trace(const chain::transaction_trace_ptr& tx_trace)
     }
 }
 
+asset get_ram_price();
 
 void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent_seq) {
     auto a = std::make_shared<Action>();
@@ -197,7 +198,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     if (not action_trace.console.empty()) a->console = action_trace.console;
 
     // get any extra data
-    if (a->account == a->receiver) {
+    if (a->account == a->receiver) { // only once
         const auto& data = action_trace.act.data;
 
         if (a->account == N(eosio)) {
@@ -222,19 +223,39 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                 }
                 case N(buyrambytes): {
                     const auto brb = fc::raw::unpack<buyrambytes>(data);
-                    // TODO: get account ram
+                    cached_ram_deals_[a->global_seq] = ram_deal{
+                        .global_seq = a->global_seq,
+                        .bytes = brb.bytes,
+                        .quantity = asset()
+                    };
                     break;
                 }
                 case N(buyram): {
                     const auto br = fc::raw::unpack<buyram>(data);
-                    // TODO: get account ram
+                    auto ram_price = get_ram_price();
+                    cached_ram_deals_[a->global_seq] = ram_deal{
+                       .global_seq = a->global_seq,
+                       .bytes = br.tokens.get_amount(),
+                       .quantity = br.tokens
+                    };
                     break;
                 }
                 case N(sellram): {
                     const auto sr = fc::raw::unpack<sellram>(data);
-                    // TODO: get account ram
+                    cached_ram_deals_[a->global_seq] = ram_deal{
+                       .global_seq = a->global_seq,
+                       .bytes = -sr.bytes,
+                       .quantity = asset()
+                    };
                     break;
                 }
+            }
+        } else if (a->name == N(create) and is_token(a->account)) {
+            try {
+                const auto create_data = fc::raw::unpack<create>(data);
+                a->extra = fc::json::to_string(create_data, fc::json::legacy_generator);
+            } catch (...) {
+                // ignore any error of unpack
             }
         } else if (a->name == N(issue) and is_token(a->account)) {
             try {
@@ -248,6 +269,14 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                 const auto transfer_data = fc::raw::unpack<transfer>(data);
                 // TODO: get table row
                 a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
+
+                if (a->account == N(eosio)) {
+                    if (transfer_data.from == N(eosio.ram)) {
+                    } else if (transfer_data.to == N(eosio.ram)) {
+                    } else if (transfer_data.from == N(eosio.ramfee)) {
+                    } else if (transfer_data.to == N(eosio.ramfee)) {
+                    }
+                }
             } catch (...) {
                 // ignore any error of unpack
             }
@@ -273,7 +302,7 @@ bool kafka::is_token(name account) {
     if (stat_name.empty()) return false;
     auto stat_struct = abi_serializer->get_struct(stat_name);
     static const vector<chain::field_def> stat_fields{
-       {"supply", "asset"}, {"max_supply", "asset"}, {"issuer", "account_name"}
+        {"supply", "asset"}, {"max_supply", "asset"}, {"issuer", "account_name"}
     };
     if (not std::equal(stat_struct.fields.cbegin(),
                        stat_struct.fields.cend(),
@@ -286,7 +315,7 @@ bool kafka::is_token(name account) {
     if (accounts_name.empty()) return false;
     auto accounts_struct = abi_serializer->get_struct(accounts_name);
     static const vector<chain::field_def> accounts_fields{
-       {"balance", "asset"}
+        {"balance", "asset"}
     };
     if (not std::equal(accounts_struct.fields.cbegin(),
                        accounts_struct.fields.cend(),
@@ -295,11 +324,24 @@ bool kafka::is_token(name account) {
         return false;
     }
 
+    auto create_name = abi_serializer->get_table_type(N(create));
+    if (create_name.empty()) return false;
+    auto create_struct = abi_serializer->get_struct(create_name);
+    static const vector<chain::field_def> create_fields{
+        {"issuer", "account_name"}, {"maximum_supply", "asset"}
+    };
+    if (not std::equal(create_struct.fields.cbegin(),
+                       create_struct.fields.cend(),
+                       create_fields.cbegin(),
+                       create_fields.cend())) {
+        return false;
+    }
+
     auto issue_name = abi_serializer->get_table_type(N(issue));
     if (issue_name.empty()) return false;
     auto issue_struct = abi_serializer->get_struct(issue_name);
     static const vector<chain::field_def> issue_fields{
-       {"balance", "asset"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+        {"balance", "asset"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
     };
     if (not std::equal(issue_struct.fields.cbegin(),
                        issue_struct.fields.cend(),
@@ -312,7 +354,7 @@ bool kafka::is_token(name account) {
     if (transfer_name.empty()) return false;
     auto transfer_struct = abi_serializer->get_struct(transfer_name);
     static const vector<chain::field_def> transfer_fields{
-       {"from", "account_name"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+        {"from", "account_name"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
     };
     if (not std::equal(transfer_struct.fields.cbegin(),
                        transfer_struct.fields.cend(),
@@ -326,6 +368,27 @@ bool kafka::is_token(name account) {
     cached_tokens_.insert(account);
 
     return true;
+}
+
+asset get_ram_price() {
+    auto& chain = app().get_plugin<chain_plugin>();
+    auto ro_api = chain.get_read_only_api();
+
+    chain_apis::read_only::get_table_rows_params p;
+    p.json = true;
+    p.code = N(eosio);
+    p.scope = "eosio";
+    p.table = "rammarket";
+    auto rammarket = ro_api.get_table_rows(p);
+    EOS_ASSERT(not rammarket.rows.empty(), chain::contract_exception, "missing rammarket");
+    auto& row = rammarket.rows.front();
+    auto& base = row["base"].get_object();
+    auto& quote = row["quote"].get_object();
+    auto base_balance = base["balance"].as<asset>();
+    auto quote_balance = quote["balance"].as<asset>();
+    auto base_weight = base["weight"].as_double();
+    auto quote_weight = quote["weight"].as_double();
+    return asset();
 }
 
 }
