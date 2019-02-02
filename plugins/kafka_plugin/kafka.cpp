@@ -5,6 +5,7 @@
 
 #include "try_handle.hpp"
 #include "actions.hpp"
+#include "exchange_state.hpp"
 
 namespace std {
 template<> struct hash<kafka::bytes> {
@@ -197,6 +198,8 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     a->tx_id = checksum_bytes(action_trace.trx_id);
     if (not action_trace.console.empty()) a->console = action_trace.console;
 
+    bool has_ram_deal = false;
+
     // get any extra data
     if (a->account == a->receiver) { // only once
         const auto& data = action_trace.act.data;
@@ -228,16 +231,18 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                         .bytes = brb.bytes,
                         .quantity = asset()
                     };
+                    has_ram_deal = true;
                     break;
                 }
                 case N(buyram): {
                     const auto br = fc::raw::unpack<buyram>(data);
                     auto ram_price = get_ram_price();
-                    cached_ram_deals_[a->global_seq] = ram_deal{
+                    auto r = ram_deal{
                        .global_seq = a->global_seq,
-                       .bytes = br.tokens.get_amount(),
+                       .bytes = static_cast<int64_t>(static_cast<double>(br.tokens.get_amount()) / ram_price.get_amount() * 1024), // estimation
                        .quantity = br.tokens
                     };
+                    a->extra = fc::json::to_string(r, fc::json::legacy_generator);
                     break;
                 }
                 case N(sellram): {
@@ -247,6 +252,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                        .bytes = -sr.bytes,
                        .quantity = asset()
                     };
+                    has_ram_deal = true;
                     break;
                 }
             }
@@ -271,10 +277,15 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                 a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
 
                 if (a->account == N(eosio)) {
-                    if (transfer_data.from == N(eosio.ram)) {
-                    } else if (transfer_data.to == N(eosio.ram)) {
-                    } else if (transfer_data.from == N(eosio.ramfee)) {
-                    } else if (transfer_data.to == N(eosio.ramfee)) {
+                    if (transfer_data.from == N(eosio.ram) or transfer_data.from == N(eosio.ramfee)) { // buy
+                       auto it = cached_ram_deals_.find(a->parent_seq);
+                       if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
+                    } else if (transfer_data.to == N(eosio.ram)) { // sell
+                        auto it = cached_ram_deals_.find(a->parent_seq);
+                        if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
+                    } else if (transfer_data.to == N(eosio.ramfee)) { // sell
+                        auto it = cached_ram_deals_.find(a->parent_seq);
+                        if (it != cached_ram_deals_.end()) it->second.quantity -= transfer_data.quantity;
                     }
                 }
             } catch (...) {
@@ -288,6 +299,15 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     for (auto& inline_trace: action_trace.inline_traces) {
         push_action(inline_trace, action_trace.receipt.global_sequence);
     }
+
+    if (has_ram_deal) {
+        auto it = cached_ram_deals_.find(a->global_seq);
+        if (it != cached_ram_deals_.end()) {
+            a->extra = fc::json::to_string(it->second, fc::json::legacy_generator);
+        }
+    }
+
+    if (parent_seq == 0) cached_ram_deals_.clear();
 }
 
 bool kafka::is_token(name account) {
@@ -382,13 +402,27 @@ asset get_ram_price() {
     auto rammarket = ro_api.get_table_rows(p);
     EOS_ASSERT(not rammarket.rows.empty(), chain::contract_exception, "missing rammarket");
     auto& row = rammarket.rows.front();
+
+    // auto supply = row["supply"].as<asset>();
     auto& base = row["base"].get_object();
     auto& quote = row["quote"].get_object();
     auto base_balance = base["balance"].as<asset>();
     auto quote_balance = quote["balance"].as<asset>();
-    auto base_weight = base["weight"].as_double();
-    auto quote_weight = quote["weight"].as_double();
-    return asset();
+    // auto base_weight = base["weight"].as_double();
+    // auto quote_weight = quote["weight"].as_double();
+
+    auto precision = quote_balance.precision();
+    // tokens per KB ram
+    auto price = static_cast<double>(quote_balance.get_amount() *  precision) / (base_balance.get_amount() + 1) * 1024 / precision;
+
+    /*
+    exchange_state state;
+    state.supply = fc::move(supply);
+    state.base = exchange_state::connector{fc::move(base_balance), base_weight};
+    state.quote = exchange_state::connector{fc::move(quote_balance), quote_weight};
+    */
+
+    return asset(static_cast<int64_t>(price), quote_balance.get_symbol());
 }
 
 }
