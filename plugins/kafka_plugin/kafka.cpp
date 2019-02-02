@@ -307,7 +307,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
         }
     }
 
-    if (parent_seq == 0) cached_ram_deals_.clear();
+    if (parent_seq == 0 and not cached_ram_deals_.empty()) cached_ram_deals_.clear();
 }
 
 bool kafka::is_token(name account) {
