@@ -38,6 +38,14 @@ extern "C" {
     */
    void set_resource_limits( account_name account, int64_t ram_bytes, int64_t net_weight, int64_t cpu_weight );
 
+  /**
+   * @brief Set guaranteed minimum resources
+   * @param ram_byte - ram limit in absolute bytes
+   * @param cpu_us - cpu limit in absolute us
+   * @param net_byte - net limit in absolute bytes
+   */
+   void set_guaranteed_minimum_resources(int64_t ram_byte, int64_t cpu_us, int64_t net_byte);
+
    /**
     * Proposes a schedule change, once the block that contains the proposal becomes irreversible, the schedule is promoted to "pending" automatically. Once the block that promotes the schedule is irreversible, the schedule will become "active"
     * @param producer_data - packed data of produce_keys in the appropriate producer schedule order

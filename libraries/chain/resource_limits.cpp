@@ -13,7 +13,8 @@ using resource_index_set = index_set<
    resource_limits_index,
    resource_usage_index,
    resource_limits_state_index,
-   resource_limits_config_index
+   resource_limits_config_index,
+   gmr_config_index
 >;
 
 static_assert( config::rate_limiting_precision > 0, "config::rate_limiting_precision must be positive" );
@@ -36,6 +37,12 @@ void elastic_limit_parameters::validate()const {
    EOS_ASSERT( expand_rate.denominator > 0, resource_limit_exception, "elastic limit parameter 'expand_rate' is not a well-defined ratio" );
 }
 
+void gmr_parameters::validate()const {
+
+   EOS_ASSERT( cpu_us > 0, resource_limit_exception, "guaranteed minmum resources parameter 'cpu_us' cannot be zero" );
+   EOS_ASSERT( net_byte > 0, resource_limit_exception, "guaranteed minmum resources parameter 'net_byte' cannot be zero" );
+   EOS_ASSERT( ram_byte >= 0, resource_limit_exception, "guaranteed minmum resources parameter'ram_byte' cannot be less than zero" );
+}
 
 void resource_limits_state_object::update_virtual_cpu_limit( const resource_limits_config_object& cfg ) {
    //idump((average_block_cpu_usage.average()));
@@ -54,6 +61,10 @@ void resource_limits_manager::add_indices() {
 void resource_limits_manager::initialize_database() {
    const auto& config = _db.create<resource_limits_config_object>([](resource_limits_config_object& config){
       // see default settings in the declaration
+   });
+
+   const auto& gmr_config = _db.create<gmr_config_object>([](gmr_config_object& config){
+       // see default settings in the declaration
    });
 
    _db.create<resource_limits_state_object>([&config](resource_limits_state_object& state){
@@ -108,6 +119,20 @@ void resource_limits_manager::set_block_parameters(const elastic_limit_parameter
    });
 }
 
+//guaranteed minimum resources  which is abbreviated  gmr
+void resource_limits_manager::set_gmr_parameters(const gmr_parameters& res_parameters) {
+   res_parameters.validate();
+   const auto& config = _db.get<gmr_config_object>();
+   _db.modify(config, [&](gmr_config_object& c){
+       c.res_parameters = res_parameters;
+   });
+}
+
+gmr_parameters resource_limits_manager::get_gmr_parameters() {
+    const auto& config = _db.get<gmr_config_object>();
+    return config.res_parameters;
+}
+
 void resource_limits_manager::update_account_usage(const flat_set<account_name>& accounts, uint32_t time_slot ) {
    const auto& config = _db.get<resource_limits_config_object>();
    for( const auto& a : accounts ) {
@@ -122,6 +147,9 @@ void resource_limits_manager::update_account_usage(const flat_set<account_name>&
 void resource_limits_manager::add_transaction_usage(const flat_set<account_name>& accounts, uint64_t cpu_usage, uint64_t net_usage, uint32_t time_slot ) {
    const auto& state = _db.get<resource_limits_state_object>();
    const auto& config = _db.get<resource_limits_config_object>();
+
+   //guaranteed minimum resources  which is abbreviated  gmr
+   const auto& gmr = _db.get<gmr_config_object>().res_parameters;
 
    for( const auto& a : accounts ) {
 
@@ -144,7 +172,7 @@ void resource_limits_manager::add_transaction_usage(const flat_set<account_name>
          uint128_t user_weight     = (uint128_t)cpu_weight;
          uint128_t all_user_weight = state.total_cpu_weight;
 
-         auto max_user_use_in_window = (virtual_network_capacity_in_window * user_weight) / all_user_weight;
+         auto max_user_use_in_window = (virtual_network_capacity_in_window * user_weight) / all_user_weight + gmr.cpu_us;
 
          EOS_ASSERT( cpu_used_in_window <= max_user_use_in_window,
                      tx_cpu_usage_exceeded,
@@ -163,7 +191,7 @@ void resource_limits_manager::add_transaction_usage(const flat_set<account_name>
          uint128_t user_weight     = (uint128_t)net_weight;
          uint128_t all_user_weight = state.total_net_weight;
 
-         auto max_user_use_in_window = (virtual_network_capacity_in_window * user_weight) / all_user_weight;
+         auto max_user_use_in_window = (virtual_network_capacity_in_window * user_weight) / all_user_weight + gmr.net_byte;
 
          EOS_ASSERT( net_used_in_window <= max_user_use_in_window,
                      tx_net_usage_exceeded,
@@ -269,8 +297,9 @@ bool resource_limits_manager::set_account_limits( const account_name& account, i
    return decreased_limit;
 }
 
-void resource_limits_manager::get_account_limits( const account_name& account, int64_t& ram_bytes, int64_t& net_weight, int64_t& cpu_weight ) const {
+void resource_limits_manager::get_account_limits( const account_name& account, int64_t& ram_bytes, int64_t& net_weight, int64_t& cpu_weight , bool raw ) const {
    const auto* pending_buo = _db.find<resource_limits_object,by_owner>( boost::make_tuple(true, account) );
+   const auto& gmr = _db.get<gmr_config_object>().res_parameters;
    if (pending_buo) {
       ram_bytes  = pending_buo->ram_bytes;
       net_weight = pending_buo->net_weight;
@@ -280,6 +309,12 @@ void resource_limits_manager::get_account_limits( const account_name& account, i
       ram_bytes  = buo.ram_bytes;
       net_weight = buo.net_weight;
       cpu_weight = buo.cpu_weight;
+   }
+
+   const int64_t ONEKB = 1024;
+   if (!raw && ram_bytes >= ONEKB)// Registered account only
+   {
+      ram_bytes += gmr.ram_byte;
    }
 }
 
@@ -373,6 +408,7 @@ account_resource_limit resource_limits_manager::get_account_cpu_limit_ex( const 
    const auto& state = _db.get<resource_limits_state_object>();
    const auto& usage = _db.get<resource_usage_object, by_owner>(name);
    const auto& config = _db.get<resource_limits_config_object>();
+   const auto& gmr = _db.get<gmr_config_object>().res_parameters;
 
    int64_t cpu_weight, x, y;
    get_account_limits( name, x, y, cpu_weight );
@@ -389,7 +425,7 @@ account_resource_limit resource_limits_manager::get_account_cpu_limit_ex( const 
    uint128_t user_weight     = (uint128_t)cpu_weight;
    uint128_t all_user_weight = (uint128_t)state.total_cpu_weight;
 
-   auto max_user_use_in_window = (virtual_cpu_capacity_in_window * user_weight) / all_user_weight;
+   auto max_user_use_in_window = (virtual_cpu_capacity_in_window * user_weight) / all_user_weight + gmr.cpu_us;
    auto cpu_used_in_window  = impl::integer_divide_ceil((uint128_t)usage.cpu_usage.value_ex * window_size, (uint128_t)config::rate_limiting_precision);
 
    if( max_user_use_in_window <= cpu_used_in_window )
@@ -411,6 +447,7 @@ account_resource_limit resource_limits_manager::get_account_net_limit_ex( const 
    const auto& config = _db.get<resource_limits_config_object>();
    const auto& state  = _db.get<resource_limits_state_object>();
    const auto& usage  = _db.get<resource_usage_object, by_owner>(name);
+   const auto& gmr = _db.get<gmr_config_object>().res_parameters;
 
    int64_t net_weight, x, y;
    get_account_limits( name, x, net_weight, y );
@@ -428,7 +465,7 @@ account_resource_limit resource_limits_manager::get_account_net_limit_ex( const 
    uint128_t all_user_weight = (uint128_t)state.total_net_weight;
 
 
-   auto max_user_use_in_window = (virtual_network_capacity_in_window * user_weight) / all_user_weight;
+   auto max_user_use_in_window = (virtual_network_capacity_in_window * user_weight) / all_user_weight + gmr.net_byte;
    auto net_used_in_window  = impl::integer_divide_ceil((uint128_t)usage.net_usage.value_ex * window_size, (uint128_t)config::rate_limiting_precision);
 
    if( max_user_use_in_window <= net_used_in_window )

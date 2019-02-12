@@ -38,6 +38,7 @@ using controller_index_set = index_set<
    account_index,
    account_sequence_index,
    global_property_multi_index,
+   global_property2_multi_index,
    dynamic_global_property_multi_index,
    core_symbol_multi_index,
    block_summary_multi_index,
@@ -672,6 +673,13 @@ struct controller_impl {
 
       db.create<core_symbol_object>([](auto& cs){
          cs.core_symbol = core_symbol();
+      });
+
+      //guaranteed minimum resources  which is abbreviated  gmr
+      db.create<global_property2_object>([&](auto &gpo) {
+          gpo.gmr.cpu_us = config::default_gmr_cpu_limit;
+          gpo.gmr.net_byte = config::default_gmr_net_limit;
+          gpo.gmr.ram_byte = config::default_gmr_ram_limit;
       });
 
       authorization.initialize_database();
@@ -1484,12 +1492,19 @@ struct controller_impl {
       // Update resource limits:
       resource_limits.process_account_limit_updates();
       const auto& chain_config = self.get_global_properties().configuration;
+      const auto& gmr = self.get_global_properties2().gmr;//guaranteed minimum resources  which is abbreviated  gmr
+
       uint32_t max_virtual_mult = 1000;
       uint64_t CPU_TARGET = EOS_PERCENT(chain_config.max_block_cpu_usage, chain_config.target_block_cpu_usage_pct);
       resource_limits.set_block_parameters(
          { CPU_TARGET, chain_config.max_block_cpu_usage, config::block_cpu_usage_average_window_ms / config::block_interval_ms, max_virtual_mult, {99, 100}, {1000, 999}},
          {EOS_PERCENT(chain_config.max_block_net_usage, chain_config.target_block_net_usage_pct), chain_config.max_block_net_usage, config::block_size_average_window_ms / config::block_interval_ms, max_virtual_mult, {99, 100}, {1000, 999}}
       );
+
+      resource_limits.set_gmr_parameters(
+              {  gmr.ram_byte, gmr.cpu_us,gmr.net_byte}
+      );
+
       resource_limits.process_block_usage(pending->_pending_block_state->block_num);
 
       set_action_merkle();
@@ -2258,6 +2273,10 @@ bool controller::is_resource_greylisted(const account_name &name) const {
 
 const flat_set<account_name> &controller::get_resource_greylist() const {
    return  my->conf.resource_greylist;
+}
+
+const global_property2_object& controller::get_global_properties2()const {
+  return my->db.get<global_property2_object>();
 }
 
 } } /// eosio::chain

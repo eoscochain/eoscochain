@@ -230,6 +230,8 @@ namespace eosiosystem {
 
          void setglobal( std::string name, std::string value );
 
+         void setgmr(int64_t ram_byte, int64_t cpu_us, int64_t net_byte);
+
       private:
          void update_elected_producers( block_timestamp timestamp );
 

@@ -150,7 +150,7 @@ class privileged_api : public context_aware_api {
       }
 
       void get_resource_limits( account_name account, int64_t& ram_bytes, int64_t& net_weight, int64_t& cpu_weight ) {
-         context.control.get_resource_limits_manager().get_account_limits( account, ram_bytes, net_weight, cpu_weight);
+         context.control.get_resource_limits_manager().get_account_limits( account, ram_bytes, net_weight, cpu_weight, true);
       }
 
       int64_t set_proposed_producers( array_ptr<char> packed_producer_schedule, size_t datalen) {
@@ -193,6 +193,23 @@ class privileged_api : public context_aware_api {
                  gprops.configuration = cfg;
          });
       }
+
+       void set_guaranteed_minimum_resources(int64_t ram_byte, int64_t cpu_us, int64_t net_byte)
+       {
+          context.require_authorization(N(eosio));
+          EOS_ASSERT(ram_byte >= 0 && ram_byte <= 100 * 1024, wasm_execution_error, "resouces minimum guarantee for ram limit expected [0, 102400]");
+          EOS_ASSERT(cpu_us >= 0 && cpu_us <= 100 * 1000, wasm_execution_error, "resouces minimum guarantee for cpu limit expected [0, 100000]");
+          EOS_ASSERT(net_byte >= 0 && net_byte <= 100 * 1024, wasm_execution_error, "resouces minimum guarantee for net limit expected [0, 102400]");
+          auto& p2 = context.control.get_global_properties2();
+          EOS_ASSERT(ram_byte >= p2.gmr.ram_byte, wasm_execution_error, "resouces minimum guarantee for ram limit can't reduce");
+          //guaranteed minimum resources  which is abbreviated  gmr
+          context.db.modify(context.control.get_global_properties2(),
+                            [&](auto &gprops2) {
+                                gprops2.gmr.ram_byte = ram_byte;
+                                gprops2.gmr.cpu_us = cpu_us;
+                                gprops2.gmr.net_byte = net_byte;
+                            });
+       }
 
       bool is_privileged( account_name n )const {
          return context.db.get<account_object, by_name>( n ).privileged;
@@ -1724,6 +1741,7 @@ REGISTER_INTRINSICS(privileged_api,
    (set_proposed_producers,           int64_t(int,int)                      )
    (get_blockchain_parameters_packed, int(int, int)                         )
    (set_blockchain_parameters_packed, void(int,int)                         )
+   (set_guaranteed_minimum_resources, void(int64_t,int64_t,int64_t)         )
    (is_privileged,                    int(int64_t)                          )
    (set_privileged,                   void(int64_t, int)                    )
 );

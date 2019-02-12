@@ -95,10 +95,10 @@ def startNode(nodeIndex, account):
     run('rm -rf ' + dir)
     run('mkdir -p ' + dir)
     otherOpts = ''.join(list(map(lambda i: '    --p2p-peer-address localhost:' + str(9000 + i), range(nodeIndex))))
-    if not nodeIndex: otherOpts += (
-        '    --plugin eosio::history_plugin'
-        '    --plugin eosio::history_api_plugin'
-    )
+    # if not nodeIndex: otherOpts += (
+    #     '    --plugin eosio::history_plugin'
+    #     '    --plugin eosio::history_api_plugin'
+    # )
     cmd = (
         args.nodeos +
         '    --max-irreversible-block-age -1'
@@ -107,7 +107,7 @@ def startNode(nodeIndex, account):
         '    --blocks-dir ' + os.path.abspath(dir) + '/blocks'
         '    --config-dir ' + os.path.abspath(dir) +
         '    --data-dir ' + os.path.abspath(dir) +
-        '    --chain-state-db-size-mb 1024'
+        '    --chain-state-db-size-mb 200'
         '    --http-server-address 127.0.0.1:' + str(8000 + nodeIndex) +
         '    --p2p-listen-endpoint 127.0.0.1:' + str(9000 + nodeIndex) +
         '    --max-clients ' + str(maxClients) +
@@ -138,7 +138,7 @@ def allocateFunds(b, e):
     dist = numpy.random.pareto(1.161, e - b).tolist() # 1.161 = 80/20 rule
     dist.sort()
     dist.reverse()
-    factor = 1_000_000_000 / sum(dist)
+    factor = 1000000000 / sum(dist)
     total = 0
     for i in range(b, e):
         funds = round(factor * dist[i - b] * 10000)
@@ -265,7 +265,7 @@ def msigReplaceSystem():
 
 def produceNewAccounts():
     with open('newusers', 'w') as f:
-        for i in range(120_000, 200_000):
+        for i in range(120000, 200000):
             x = getOutput(args.cleos + 'create key --to-console')
             r = re.match('Private key: *([^ \n]*)\nPublic key: *([^ \n]*)', x, re.DOTALL | re.MULTILINE)
             name = 'user'
@@ -282,7 +282,7 @@ def stepStartWallet():
     importKeys()
 def stepStartBoot():
     startNode(0, {'name': 'eosio', 'pvt': args.private_key, 'pub': args.public_key})
-    sleep(1.5)
+    sleep(15)
 def stepInstallSystemContracts():
     run(args.cleos + 'set contract eosio.token ' + args.contracts_dir + 'eosio.token/')
     run(args.cleos + 'set contract eosio.msig ' + args.contracts_dir + 'eosio.msig/')
@@ -321,6 +321,22 @@ def stepTransfer():
 def stepLog():
     run('tail -n 60 ' + args.nodes_dir + '00-eosio/stderr')
 
+def stepTestGmr():
+    act = 'cochainchian'
+    run(args.cleos + 'push action eosio setgmr \'[ 0, 100000, 10000 ]\' -p %s' %(act))
+
+
+    run(args.cleos + 'system newaccount producer111g %s %s %s --buy-ram-kbytes 6 --stake-net "0.0000 SYS" --stake-cpu "0.0000 SYS" ' %(act , args.public_key, args.public_key))
+    run(args.cleos + 'transfer producer111g %s "1.0000 SYS"' % (act))
+
+
+    run(args.cleos + 'get account %s' % act)
+
+    for i in range(0,100):
+        run(args.cleos + 'push action eosio.token transfer \'[ "%s", "%s", "0.0001 SYS", "m" ]\' -p %s -f' % (act, "producer111g",act))
+        # run(args.cleos + '-f transfer  ' + act + '  producer111g "0.0001 SYS"')
+    run(args.cleos + 'get account %s' % act)
+
 # Command Line Arguments
 
 parser = argparse.ArgumentParser()
@@ -337,12 +353,13 @@ commands = [
     ('p', 'reg-prod',       stepRegProducers,           True,    "Register producers"),
     ('P', 'start-prod',     stepStartProducers,         True,    "Start producers"),
     ('v', 'vote',           stepVote,                   True,    "Vote for producers"),
-    ('R', 'claim',          claimRewards,               True,    "Claim rewards"),
-    ('x', 'proxy',          stepProxyVotes,             True,    "Proxy votes"),
-    ('q', 'resign',         stepResign,                 True,    "Resign eosio"),
+    # ('R', 'claim',          claimRewards,               True,    "Claim rewards"),
+    # ('x', 'proxy',          stepProxyVotes,             True,    "Proxy votes"),
+    # ('q', 'resign',         stepResign,                 True,    "Resign eosio"),
     ('m', 'msg-replace',    msigReplaceSystem,          False,   "Replace system contract using msig"),
     ('X', 'xfer',           stepTransfer,               False,   "Random transfer tokens (infinite loop)"),
     ('l', 'log',            stepLog,                    True,    "Show tail of node's log"),
+    ('g', 'gmr',            stepTestGmr,                False,    ""),
 ]
 
 parser.add_argument('--public-key', metavar='', help="EOSIO Public Key", default='EOS8Znrtgwt8TfpmbVpTKvA2oB8Nqey625CLN8bCN3TEbgx86Dsvr', dest="public_key")
@@ -356,12 +373,12 @@ parser.add_argument('--genesis', metavar='', help="Path to genesis.json", defaul
 parser.add_argument('--wallet-dir', metavar='', help="Path to wallet directory", default='./wallet/')
 parser.add_argument('--log-path', metavar='', help="Path to log file", default='./output.log')
 parser.add_argument('--symbol', metavar='', help="The eosio.system symbol", default='SYS')
-parser.add_argument('--user-limit', metavar='', help="Max number of users. (0 = no limit)", type=int, default=3000)
+parser.add_argument('--user-limit', metavar='', help="Max number of users. (0 = no limit)", type=int, default=5)
 parser.add_argument('--max-user-keys', metavar='', help="Maximum user keys to import into wallet", type=int, default=10)
 parser.add_argument('--ram-funds', metavar='', help="How much funds for each user to spend on ram", type=float, default=0.1)
 parser.add_argument('--min-stake', metavar='', help="Minimum stake before allocating unstaked funds", type=float, default=0.9)
 parser.add_argument('--max-unstaked', metavar='', help="Maximum unstaked funds", type=float, default=10)
-parser.add_argument('--producer-limit', metavar='', help="Maximum number of producers. (0 = no limit)", type=int, default=0)
+parser.add_argument('--producer-limit', metavar='', help="Maximum number of producers. (0 = no limit)", type=int, default=30)
 parser.add_argument('--min-producer-funds', metavar='', help="Minimum producer funds", type=float, default=1000.0000)
 parser.add_argument('--num-producers-vote', metavar='', help="Number of producers for which each user votes", type=int, default=20)
 parser.add_argument('--num-voters', metavar='', help="Number of voters", type=int, default=10)

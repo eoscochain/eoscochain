@@ -105,6 +105,12 @@ struct chain_config {
 
 };
 
+struct guaranteed_minimum_resources {
+    uint64_t ram_byte;
+    uint64_t cpu_us;
+    uint64_t net_byte;
+};
+
 } } // namespace eosio::chain
 
 FC_REFLECT(eosio::chain::chain_config,
@@ -119,3 +125,5 @@ FC_REFLECT(eosio::chain::chain_config,
            (max_inline_action_size)(max_inline_action_depth)(max_authority_depth)
 
 )
+
+FC_REFLECT( eosio::chain::guaranteed_minimum_resources, (ram_byte)(cpu_us)(net_byte) )

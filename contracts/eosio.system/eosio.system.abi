@@ -417,6 +417,14 @@
          {"name":"name", "type":"string"},
          {"name":"value", "type":"string"}
        ]
+   }, {
+       "name": "setgmr",
+       "base": "",
+       "fields": [
+         {"name":"ram_byte", "type":"int64"},
+         {"name":"cpu_us", "type":"int64"},
+         {"name":"net_byte", "type":"int64"}
+       ]
    }
    ],
    "actions": [{
@@ -539,6 +547,10 @@
       "name": "setglobal",
       "type": "setglobal",
       "ricardian_contract": ""
+   },{
+       "name": "setgmr",
+       "type": "setgmr",
+       "ricardian_contract": ""
    }],
    "tables": [{
       "name": "producers",

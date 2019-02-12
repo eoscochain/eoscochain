@@ -27,6 +27,7 @@ namespace eosio { namespace chain {
 
    class dynamic_global_property_object;
    class global_property_object;
+   class global_property2_object;
    class core_symbol_object;
    class permission_object;
    class account_object;
@@ -217,6 +218,9 @@ namespace eosio { namespace chain {
 
          void add_resource_greylist(const account_name &name);
          void remove_resource_greylist(const account_name &name);
+
+         const global_property2_object&        get_global_properties2()const;
+
          bool is_resource_greylisted(const account_name &name) const;
          const flat_set<account_name> &get_resource_greylist() const;
 
