@@ -230,6 +230,14 @@ namespace eosiosystem {
 
          void setglobal( std::string name, std::string value );
 
+         /**
+          * Set Minimal Resource Security (MRS) parameters.
+          * @param cpu_us
+          * @param net_bytes
+          * @param ram_bytes
+          */
+         void setmrs(int64_t cpu_us, int64_t net_bytes, int64_t ram_bytes);
+
       private:
          void update_elected_producers( block_timestamp timestamp );
 

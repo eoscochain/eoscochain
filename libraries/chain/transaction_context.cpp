@@ -362,7 +362,7 @@ namespace bacc = boost::accumulators;
 
       auto& rl = control.get_mutable_resource_limits_manager();
       for( auto a : validate_ram_usage ) {
-         rl.verify_account_ram_usage( a );
+         rl.verify_account_ram_usage( a.first, a.second );
       }
 
       // Calculate the new highest network usage and CPU time that all of the billed accounts can afford to be billed
@@ -522,12 +522,20 @@ namespace bacc = boost::accumulators;
       }
    }
 
-   void transaction_context::add_ram_usage( account_name account, int64_t ram_delta ) {
+   void transaction_context::add_ram_usage( account_name account, int64_t ram_delta, bool includes_mrs_ram ) {
       auto& rl = control.get_mutable_resource_limits_manager();
       rl.add_pending_ram_usage( account, ram_delta );
-      if( ram_delta > 0 ) {
-         validate_ram_usage.insert( account );
+      if( ram_delta > 0 )
+      {
+          emplace_validate_ram_usage(account, includes_mrs_ram);
       }
+   }
+
+   void transaction_context::emplace_validate_ram_usage( account_name account, bool includes_mrs_ram ) {
+      auto iter = validate_ram_usage.find(account);
+      if (iter != validate_ram_usage.end() && !iter->second)
+         return;
+      validate_ram_usage[account] = includes_mrs_ram;
    }
 
    uint32_t transaction_context::update_billed_cpu_time( fc::time_point now ) {

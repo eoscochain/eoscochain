@@ -725,8 +725,8 @@ uint64_t apply_context::next_auth_sequence( account_name actor ) {
    return rs.auth_sequence;
 }
 
-void apply_context::add_ram_usage( account_name account, int64_t ram_delta ) {
-   trx_context.add_ram_usage( account, ram_delta );
+void apply_context::add_ram_usage( account_name account, int64_t ram_delta, bool includes_mrs_ram ) {
+   trx_context.add_ram_usage( account, ram_delta, includes_mrs_ram );
 
    auto p = _account_ram_deltas.emplace( account, ram_delta );
    if( !p.second ) {

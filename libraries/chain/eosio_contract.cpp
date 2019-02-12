@@ -121,7 +121,7 @@ void apply_eosio_newaccount(apply_context& context) {
    ram_delta += owner_permission.auth.get_billable_size();
    ram_delta += active_permission.auth.get_billable_size();
 
-   context.add_ram_usage(create.name, ram_delta);
+   context.add_ram_usage(create.name, ram_delta, false);
 
 } FC_CAPTURE_AND_RETHROW( (create) ) }
 
