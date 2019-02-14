@@ -89,7 +89,7 @@ using ActionPtr = std::shared_ptr<Action>;
 }
 
 FC_REFLECT_ENUM(kafka::TransactionStatus, (executed)(soft_fail)(hard_fail)(delayed)(expired)(unknown))
-FC_REFLECT(kafka::Block, (id)(num)(timestamp)(block)(tx_count)(action_count)(context_free_action_count))
+FC_REFLECT(kafka::Block, (id)(num)(timestamp)(block)(tx_count)(action_count)(context_free_action_count)(transactions)(actions))
 FC_REFLECT(kafka::IrreversibleBlock, (id)(num))
 FC_REFLECT(kafka::Transaction, (id)(block_id)(block_num)(block_time)(block_seq)(status)(net_usage_words)
                                (cpu_usage_us)(exception)(action_count)(context_free_action_count))
