@@ -962,6 +962,9 @@ class action_api : public context_aware_api {
       name current_receiver() {
          return context.receiver;
       }
+      bool is_inline(){
+         return context.recurse_depth > 0;
+      }
 };
 
 class core_symbol_api : public context_aware_api {
@@ -1817,7 +1820,8 @@ REGISTER_INTRINSICS(context_free_system_api,
 REGISTER_INTRINSICS(action_api,
    (read_action_data,       int(int, int)  )
    (action_data_size,       int()          )
-   (current_receiver,   int64_t()          )
+   (current_receiver,       int64_t()      )
+   (is_inline,              int()          )
 );
 
 REGISTER_INTRINSICS(authorization_api,
