@@ -276,7 +276,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                 // TODO: get table row
                 a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
 
-                if (a->account == N(eosio)) {
+                if (a->account == N(eosio.token)) {
                     if (transfer_data.from == N(eosio.ram) or transfer_data.from == N(eosio.ramfee)) { // buy
                        auto it = cached_ram_deals_.find(a->parent_seq);
                        if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
@@ -344,7 +344,7 @@ bool kafka::is_token(name account) {
         return false;
     }
 
-    auto create_name = abi_serializer->get_table_type(N(create));
+    auto create_name = abi_serializer->get_action_type(N(create));
     if (create_name.empty()) return false;
     auto create_struct = abi_serializer->get_struct(create_name);
     static const vector<chain::field_def> create_fields{
@@ -357,11 +357,11 @@ bool kafka::is_token(name account) {
         return false;
     }
 
-    auto issue_name = abi_serializer->get_table_type(N(issue));
+    auto issue_name = abi_serializer->get_action_type(N(issue));
     if (issue_name.empty()) return false;
     auto issue_struct = abi_serializer->get_struct(issue_name);
     static const vector<chain::field_def> issue_fields{
-        {"balance", "asset"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+        {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
     };
     if (not std::equal(issue_struct.fields.cbegin(),
                        issue_struct.fields.cend(),
@@ -370,7 +370,7 @@ bool kafka::is_token(name account) {
         return false;
     }
 
-    auto transfer_name = abi_serializer->get_table_type(N(transfer));
+    auto transfer_name = abi_serializer->get_action_type(N(transfer));
     if (transfer_name.empty()) return false;
     auto transfer_struct = abi_serializer->get_struct(transfer_name);
     static const vector<chain::field_def> transfer_fields{
