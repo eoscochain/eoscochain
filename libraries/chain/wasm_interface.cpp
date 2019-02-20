@@ -145,7 +145,7 @@ class privileged_api : public context_aware_api {
          EOS_ASSERT(net_weight >= -1, wasm_execution_error, "invalid value for net resource weight expected [-1,INT64_MAX]");
          EOS_ASSERT(cpu_weight >= -1, wasm_execution_error, "invalid value for cpu resource weight expected [-1,INT64_MAX]");
          if( context.control.get_mutable_resource_limits_manager().set_account_limits(account, ram_bytes, net_weight, cpu_weight) ) {
-            context.trx_context.validate_ram_usage.insert( account );
+            context.trx_context.emplace_validate_ram_usage( account );
          }
       }
 
@@ -193,6 +193,20 @@ class privileged_api : public context_aware_api {
                  gprops.configuration = cfg;
          });
       }
+
+      void set_minimum_resource_security(int64_t ram_bytes, int64_t net_bytes, int64_t cpu_us) {
+         context.require_authorization(N(eosio));
+         EOS_ASSERT(cpu_us >= 0, wasm_execution_error, "cpu_us must be >= 0");
+         EOS_ASSERT(net_bytes >= 0, wasm_execution_error, "net_bytes must be >= 0");
+         EOS_ASSERT(ram_bytes >= 0, wasm_execution_error, "ram_bytes must be >= 0");
+         auto& resource_limits = context.control.get_mutable_resource_limits_manager();
+         int64_t x, y, current_ram_bytes;
+         resource_limits.get_mrs_parameters(current_ram_bytes, x, y);
+         EOS_ASSERT(ram_bytes >= current_ram_bytes, wasm_execution_error,
+                 "ram_bytes cannot be reduced, current_ram_bytes: '${current_ram_bytes}', set_ram_bytes: '${set_ram_bytes}'",
+                    ("current_ram_bytes", current_ram_bytes)("set_ram_bytes", ram_bytes));
+         resource_limits.set_mrs_parameters(ram_bytes, net_bytes, cpu_us);
+       }
 
       bool is_privileged( account_name n )const {
          return context.db.get<account_object, by_name>( n ).privileged;
@@ -1731,6 +1745,7 @@ REGISTER_INTRINSICS(privileged_api,
    (set_proposed_producers,           int64_t(int,int)                      )
    (get_blockchain_parameters_packed, int(int, int)                         )
    (set_blockchain_parameters_packed, void(int,int)                         )
+   (set_minimum_resource_security,    void(int64_t,int64_t,int64_t)         )
    (is_privileged,                    int(int64_t)                          )
    (set_privileged,                   void(int64_t, int)                    )
 );

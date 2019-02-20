@@ -194,6 +194,10 @@ namespace eosio { namespace chain { namespace resource_limits {
 
       uint32_t account_cpu_usage_average_window = config::account_cpu_usage_average_window_ms / config::block_interval_ms;
       uint32_t account_net_usage_average_window = config::account_net_usage_average_window_ms / config::block_interval_ms;
+
+      int64_t mrs_cpu_us = config::default_mrs_cpu_us;
+      int64_t mrs_net_bytes = config::default_mrs_net_bytes;
+      int64_t mrs_ram_bytes = config::default_mrs_ram_bytes;
    };
 
    using resource_limits_config_index = chainbase::shared_multi_index_container<
@@ -270,5 +274,5 @@ FC_REFLECT(eosio::chain::resource_limits::usage_accumulator, (last_ordinal)(valu
 // @ignore pending
 FC_REFLECT(eosio::chain::resource_limits::resource_limits_object, (owner)(net_weight)(cpu_weight)(ram_bytes))
 FC_REFLECT(eosio::chain::resource_limits::resource_usage_object,  (owner)(net_usage)(cpu_usage)(ram_usage))
-FC_REFLECT(eosio::chain::resource_limits::resource_limits_config_object, (cpu_limit_parameters)(net_limit_parameters)(account_cpu_usage_average_window)(account_net_usage_average_window))
+FC_REFLECT(eosio::chain::resource_limits::resource_limits_config_object, (cpu_limit_parameters)(net_limit_parameters)(account_cpu_usage_average_window)(account_net_usage_average_window)(mrs_cpu_us)(mrs_net_bytes)(mrs_ram_bytes))
 FC_REFLECT(eosio::chain::resource_limits::resource_limits_state_object, (average_block_net_usage)(average_block_cpu_usage)(pending_net_usage)(pending_cpu_usage)(total_net_weight)(total_cpu_weight)(total_ram_bytes)(virtual_net_limit)(virtual_cpu_limit))

@@ -83,6 +83,11 @@ const static uint16_t   default_max_auth_depth                 = 6;
 const static uint32_t   default_sig_cpu_bill_pct               = 50 * percent_1; // billable percentage of signature recovery
 const static uint16_t   default_controller_thread_pool_size    = 2;
 
+// Minimal Resource Security (MRS)
+const static uint32_t   default_mrs_cpu_us = 200'000; // 200 microseconds
+const static uint32_t   default_mrs_net_bytes = 10 * 1024; // 10 KB
+const static uint32_t   default_mrs_ram_bytes = 0; // 0 KB
+
 const static uint32_t   min_net_usage_delta_between_base_and_max_for_trx  = 10*1024;
 // Should be large enough to allow recovery from badly set blockchain parameters without a hard fork
 // (unless net_usage_leeway is set to 0 and so are the net limits of all accounts that can help with resetting blockchain parameters).
