@@ -194,6 +194,35 @@ namespace eosiosystem {
       set_minimum_resource_security(ram_bytes, net_bytes, cpu_us);
    }
 
+   // actor
+   void system_contract::setactwhite(const std::vector<account_name>& accounts) {
+      setwblists_impl(N(actorwhite));
+   }
+   void system_contract::setactblack(const std::vector<account_name>& accounts) {
+      setwblists_impl(N(actorblack));
+   }
+   // contract
+   void system_contract::setcodewhite(const std::vector<account_name>& contracts) {
+      setwblists_impl(N(codewhite));
+   }
+   void system_contract::setcodeblack(const std::vector<account_name>& contracts) {
+      setwblists_impl(N(codeblack));
+   }
+   // public key blacklist
+   void system_contract::setkeyblack(const std::vector<std::string>& keys) {
+      setwblists_impl(N(keyblack));
+   }
+
+   void system_contract::setwblists_impl(const account_name& wb_type) {
+      require_auth(_self);
+
+      constexpr size_t max_stack_buffer_size = 512;
+      size_t size = action_data_size();
+      char* buffer = (char*)( max_stack_buffer_size < size ? malloc(size) : alloca(size) );
+      read_action_data( buffer, size );
+      set_whiteblack_lists(wb_type, buffer, size);
+   }
+
    /**
     *  Called after a new account is created. This code enforces resource-limits rules
     *  for new accounts as well as new account naming conventions.
@@ -248,7 +277,8 @@ EOSIO_ABI( eosiosystem::system_contract,
      // native.hpp (newaccount definition is actually in eosio.system.cpp)
      (newaccount)(updateauth)(deleteauth)(linkauth)(unlinkauth)(canceldelay)(onerror)
      // eosio.system.cpp
-     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setglobal)(setmrs)
+     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setglobal)
+     (setmrs)(setactwhite)(setactblack)(setcodewhite)(setcodeblack)(setkeyblack)
      // delegate_bandwidth.cpp
      (buyrambytes)(buyram)(sellram)(delegatebw)(undelegatebw)(refund)
      // voting.cpp

@@ -1754,6 +1754,16 @@ void controller::startup( std::function<bool()> shutdown, const snapshot_reader_
    }
    my->init(shutdown, snapshot);
    core_symbol(symbol(get_core_symbol().core_symbol).name());
+
+   // use onchain whiteblacklist from DB
+   auto &dblist = my->db.get<global_property_object>().onchain_whiteblacklist;
+   udpate_applied_whitelist(true, my->conf.sender_bypass_whiteblacklist, dblist.sender_bypass_whiteblacklist);
+   udpate_applied_whitelist(true, my->conf.actor_whitelist, dblist.actor_whitelist);
+   udpate_applied_whitelist(true, my->conf.actor_blacklist, dblist.actor_blacklist);
+   udpate_applied_whitelist(true, my->conf.contract_whitelist, dblist.contract_whitelist);
+   udpate_applied_whitelist(true, my->conf.contract_blacklist, dblist.contract_blacklist);
+   udpate_applied_whitelist(true, my->conf.action_blacklist, dblist.action_blacklist);
+   udpate_applied_whitelist(true, my->conf.key_blacklist, dblist.key_blacklist);
 }
 
 const chainbase::database& controller::db()const { return my->db; }
@@ -1833,27 +1843,145 @@ const flat_set<public_key_type>& controller::get_key_blacklist() const {
    return my->conf.key_blacklist;
 }
 
-void controller::set_actor_whitelist( const flat_set<account_name>& new_actor_whitelist ) {
-   my->conf.actor_whitelist = new_actor_whitelist;
+void controller::set_actor_whitelist( const flat_set<account_name>& new_actor_whitelist, bool bLocalOrOnchain ) {
+   auto &gpo = my->db.get<global_property_object>();
+   auto &dblist = gpo.onchain_whiteblacklist;
+   if (bLocalOrOnchain) { // local
+      my->conf.actor_whitelist = new_actor_whitelist;
+      udpate_applied_whitelist(true, my->conf.actor_whitelist, dblist.actor_whitelist);
+   } else { // onchain
+      my->db.modify(gpo, [&](auto &obj) {
+          set_onchain_whitelist_and_apply(new_actor_whitelist, obj.onchain_whiteblacklist.actor_whitelist, my->conf.actor_whitelist);
+      });
+
+
+   }
 }
-void controller::set_actor_blacklist( const flat_set<account_name>& new_actor_blacklist ) {
-   my->conf.actor_blacklist = new_actor_blacklist;
+void controller::set_actor_blacklist( const flat_set<account_name>& new_actor_blacklist, bool bLocalOrOnchain ) {
+   auto &gpo = my->db.get<global_property_object>();
+   auto &dblist = gpo.onchain_whiteblacklist;
+   if (bLocalOrOnchain) { // local
+      my->conf.actor_blacklist = new_actor_blacklist;
+      udpate_applied_whitelist(true, my->conf.actor_blacklist, dblist.actor_blacklist);
+   } else { // onchain
+      my->db.modify(gpo, [&](auto &obj) {
+          set_onchain_whitelist_and_apply(new_actor_blacklist, obj.onchain_whiteblacklist.actor_blacklist, my->conf.actor_blacklist);
+      });
+
+   }
+
 }
-void controller::set_contract_whitelist( const flat_set<account_name>& new_contract_whitelist ) {
-   my->conf.contract_whitelist = new_contract_whitelist;
+void controller::set_contract_whitelist( const flat_set<account_name>& new_contract_whitelist, bool bLocalOrOnchain ) {
+   auto &gpo = my->db.get<global_property_object>();
+   auto &dblist = gpo.onchain_whiteblacklist;
+   if (bLocalOrOnchain) { // local
+      my->conf.contract_whitelist = new_contract_whitelist;
+      udpate_applied_whitelist(true, my->conf.contract_whitelist, dblist.contract_whitelist);
+   } else { // onchain
+      my->db.modify(gpo, [&](auto &obj) {
+          set_onchain_whitelist_and_apply(new_contract_whitelist, obj.onchain_whiteblacklist.contract_whitelist, my->conf.contract_whitelist);
+      });
+   }
+
 }
-void controller::set_contract_blacklist( const flat_set<account_name>& new_contract_blacklist ) {
-   my->conf.contract_blacklist = new_contract_blacklist;
+void controller::set_contract_blacklist( const flat_set<account_name>& new_contract_blacklist, bool bLocalOrOnchain ) {
+   auto &gpo = my->db.get<global_property_object>();
+   auto &dblist = gpo.onchain_whiteblacklist;
+   if (bLocalOrOnchain) { // local
+      my->conf.contract_blacklist = new_contract_blacklist;
+      udpate_applied_whitelist(true, my->conf.contract_blacklist, dblist.contract_blacklist);
+   } else { // onchain
+      my->db.modify(gpo, [&](auto &obj) {
+          set_onchain_whitelist_and_apply(new_contract_blacklist, obj.onchain_whiteblacklist.contract_blacklist, my->conf.contract_blacklist);
+      });
+   }
+
 }
-void controller::set_action_blacklist( const flat_set< pair<account_name, action_name> >& new_action_blacklist ) {
+void controller::set_action_blacklist( const flat_set< pair<account_name, action_name> >& new_action_blacklist, bool bLocalOrOnchain ) {
    for (auto& act: new_action_blacklist) {
       EOS_ASSERT(act.first != account_name(), name_type_exception, "Action blacklist - contract name should not be empty");
       EOS_ASSERT(act.second != action_name(), action_type_exception, "Action blacklist - action name should not be empty");
    }
-   my->conf.action_blacklist = new_action_blacklist;
+
+   auto &gpo = my->db.get<global_property_object>();
+   auto &dblist = gpo.onchain_whiteblacklist;
+   if (bLocalOrOnchain) { // local
+      my->conf.action_blacklist = new_action_blacklist;
+      udpate_applied_whitelist(true, my->conf.action_blacklist, dblist.action_blacklist);
+   } else { // onchain
+      my->db.modify(gpo, [&](auto &obj) {
+          set_onchain_whitelist_and_apply(new_action_blacklist, obj.onchain_whiteblacklist.action_blacklist, my->conf.action_blacklist);
+      });
+   }
 }
-void controller::set_key_blacklist( const flat_set<public_key_type>& new_key_blacklist ) {
-   my->conf.key_blacklist = new_key_blacklist;
+void controller::set_key_blacklist( const flat_set<public_key_type>& new_key_blacklist, bool bLocalOrOnchain ) {
+   auto &gpo = my->db.get<global_property_object>();
+   auto &dblist = gpo.onchain_whiteblacklist;
+   if (bLocalOrOnchain) { // local
+      my->conf.key_blacklist = new_key_blacklist;
+      udpate_applied_whitelist(true, my->conf.key_blacklist, dblist.key_blacklist);
+   } else { // onchain
+      my->db.modify(gpo, [&](auto &obj) {
+          set_onchain_whitelist_and_apply(new_key_blacklist, obj.onchain_whiteblacklist.key_blacklist, my->conf.key_blacklist);
+      });
+   }
+}
+
+template <typename T>
+void controller::udpate_applied_whitelist(bool bAddOrDel,  flat_set<T>& dest, const flat_set<T>& diff) {
+   if (diff.size() == 0) return;
+   if (bAddOrDel) { // add
+      for (auto &obj : diff)
+         dest.insert(obj);
+   } else { // del
+      for (auto &obj : diff) {
+         dest.erase(obj);
+      }
+   }
+}
+
+template <typename T>
+void controller::udpate_applied_whitelist(bool bAddOrDel,  flat_set<T>& dest, const shared_vector<T>& diff) {
+  if (diff.size() == 0) return;
+  if (bAddOrDel) { // add
+     for (auto &obj : diff)
+        dest.insert(obj);
+  } else { // del
+     for (auto &obj : diff) {
+        dest.erase(obj);
+     }
+  }
+}
+
+template <typename T>
+void controller::set_onchain_whitelist_and_apply(const flat_set<T>& new_set, shared_vector<T>& db_wb_list, flat_set<T>& apply_wb_list) {
+   flat_set<T> old_set(db_wb_list.begin(), db_wb_list.end());
+
+   flat_set<T> del_set;
+   del_set.reserve(old_set.size());
+   set_difference(old_set.begin(), old_set.end(),
+           new_set.begin(), new_set.end(),
+           std::inserter(del_set,del_set.begin()));
+
+   flat_set<T> add_set;
+   add_set.reserve(old_set.size());
+   set_difference(new_set.begin(), new_set.end(),
+           old_set.begin(), old_set.end(),
+           std::inserter(add_set,add_set.begin()));
+
+   for (auto iter = db_wb_list.begin(); iter != db_wb_list.end(); ) {
+      if (del_set.find(*iter) != del_set.end())
+         iter = db_wb_list.erase(iter);
+      else
+         ++iter;
+   }
+
+   for (auto& a : add_set){
+      db_wb_list.push_back(a);
+   }
+
+   udpate_applied_whitelist(false, apply_wb_list, del_set);
+   udpate_applied_whitelist(true, apply_wb_list, add_set);
 }
 
 uint32_t controller::head_block_num()const {

@@ -43,4 +43,22 @@ namespace eosio { namespace chain {
                   "max authority depth should be at least 1" );
 }
 
-} } // namespace eosio::chain
+void shared_onchain_whiteblacklist_type::validate() const{
+      EOS_ASSERT(std::numeric_limits<decltype(sender_bypass_whiteblacklist.size())>::max() > sender_bypass_whiteblacklist.size(),
+                 action_validate_exception, "Overflow in list when adding sender_bypass_whiteblacklist!");
+      EOS_ASSERT(std::numeric_limits<decltype(actor_whitelist.size())>::max() > actor_whitelist.size(),
+                 action_validate_exception, "Overflow in whitelist when adding actor whitelist!");
+      EOS_ASSERT(std::numeric_limits<decltype(actor_blacklist.size())>::max() > actor_blacklist.size(),
+              action_validate_exception, "Overflow in blacklist when adding actor blacklist!");
+      EOS_ASSERT(std::numeric_limits<decltype(contract_whitelist.size())>::max() > contract_whitelist.size(),
+              action_validate_exception, "Overflow in whitelist when adding contract whitelist!");
+      EOS_ASSERT(std::numeric_limits<decltype(contract_blacklist.size())>::max() > contract_blacklist.size(),
+                 action_validate_exception, "Overflow in blacklist when adding contract blacklist!");
+      EOS_ASSERT(std::numeric_limits<decltype(action_blacklist.size())>::max() > action_blacklist.size(),
+              action_validate_exception, "Overflow in blacklist adding action blacklist!");
+      EOS_ASSERT(std::numeric_limits<decltype(key_blacklist.size())>::max() > key_blacklist.size(),
+                 action_validate_exception, "Overflow in blacklist adding key blacklist!");
+}
+
+
+    } } // namespace eosio::chain

@@ -62,6 +62,7 @@ class whitelist_blacklist_tester {
          cfg.contract_whitelist = contract_whitelist;
          cfg.contract_blacklist = contract_blacklist;
          cfg.action_blacklist = action_blacklist;
+         cfg.key_blacklist = key_blacklist;
 
          chain.emplace(cfg);
          wdump((last_produced_block));
@@ -108,6 +109,7 @@ class whitelist_blacklist_tester {
       flat_set<account_name>            contract_whitelist;
       flat_set<account_name>            contract_blacklist;
       flat_set< pair<account_name, action_name> >  action_blacklist;
+      flat_set<public_key_type> key_blacklist;
       map<account_name, block_id_type>  last_produced_block;
 };
 
@@ -734,5 +736,140 @@ BOOST_AUTO_TEST_CASE( blacklist_sender_bypass ) { try {
    }
 
 } FC_LOG_AND_RETHROW() }
+
+template <typename T>
+auto merge_set(const flat_set<T> l, const flat_set<T> r) {
+   flat_set<T> ret(l.begin(), l.end());
+   for (auto & o : r)
+      ret.insert(o);
+   return ret;
+}
+
+BOOST_AUTO_TEST_CASE( local_and_onchain_blacklist ) { try {
+   whitelist_blacklist_tester<> test;
+//   test.sender_bypass_whiteblacklist
+   flat_set<account_name> acct_set[3] = {{},
+                                         {N(eosio), N(eosio.token), N(alice1), N(alice2),  N(alice3)},
+                                         {N(alice1),N(alice4), N(alice5), N(alices)}};
+   flat_set< pair<account_name, action_name> > acct_act_set[3] = {{},
+                                                                {{N(code), N(act1)}, {N(code), N(act2)}, {N(code), N(act3)}},
+                                                                {{N(code), N(act4)}, {N(code), N(act5)}}
+   };
+   flat_set<public_key_type> pub_set[3] = {{},
+                                  {public_key_type(
+                                          string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi")), public_key_type(
+                                          string("EOS88HsUadjQdvRTjvkCR367i1KLbts1SuH1YNS2CEBUga1VLjzzj")), public_key_type(
+                                          string("EOS7c3zLNzBSziBjT3VAZPszz7u58ax42J3r4aKm4sHA75BwmNrto"))},
+                                  {public_key_type(
+                                          string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi")),public_key_type(
+                                          string("EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV")), public_key_type(
+                                          string("EOS7uG1PmJVHvYbxAsDQsbKRQAd5QNSRrH7nkJVYvZ84XjfQoYVb9")), public_key_type(
+                                          string("EOS7By98EfcCMAKLZFPYY7gxPE4sZiCLo6uJDaet8sZCrXL54Yng2"))}
+   };
+   flat_set<string> key_set[3] = {
+           {},
+           {string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi"),
+                   string("EOS88HsUadjQdvRTjvkCR367i1KLbts1SuH1YNS2CEBUga1VLjzzj"),
+                   string("EOS7c3zLNzBSziBjT3VAZPszz7u58ax42J3r4aKm4sHA75BwmNrto")
+           },
+           {string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi"),
+            string("EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV"),
+                   string("EOS7uG1PmJVHvYbxAsDQsbKRQAd5QNSRrH7nkJVYvZ84XjfQoYVb9"),
+                   string("EOS7By98EfcCMAKLZFPYY7gxPE4sZiCLo6uJDaet8sZCrXL54Yng2")}
+   };
+   auto keylist_to_string = [](const flat_set<public_key_type> & input){
+       flat_set<string> get_key_set;
+       for(auto& o : input) {
+          get_key_set.insert(string(o));
+       }
+       return get_key_set;
+   };
+
+
+   test.actor_whitelist = test.contract_whitelist = test.actor_blacklist = test.contract_blacklist = acct_set[1];
+   test.action_blacklist = acct_act_set[1];
+   test.key_blacklist = pub_set[1];
+   test.init();
+
+   BOOST_TEST(test.chain->control->get_actor_whitelist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_actor_blacklist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_contract_whitelist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_contract_blacklist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_action_blacklist() == acct_act_set[1]);
+   BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == key_set[1]);
+
+   // local or onchain
+   for (int t = 0; t < 2; t++) {
+      bool bLocal = (t==0);
+      for (int i = 2; i >= 0; i--) {
+
+         test.chain->control->set_actor_whitelist(acct_set[i], bLocal);
+         test.chain->control->set_actor_blacklist(acct_set[i], bLocal);
+         test.chain->control->set_contract_whitelist(acct_set[i], bLocal);
+         test.chain->control->set_contract_blacklist(acct_set[i], bLocal);
+         test.chain->control->set_action_blacklist(acct_act_set[i], bLocal);
+         test.chain->control->set_key_blacklist(pub_set[i], bLocal);
+
+//         BOOST_TEST_MESSAGE("local or onchain: " << bLocal <<  " testgroup " << i << " blacklist size: " << acct_set[i].size());
+         BOOST_TEST(test.chain->control->get_actor_whitelist() == acct_set[i]);
+         BOOST_TEST(test.chain->control->get_actor_blacklist() == acct_set[i]);
+         BOOST_TEST(test.chain->control->get_contract_whitelist() == acct_set[i]);
+         BOOST_TEST(test.chain->control->get_contract_blacklist() == acct_set[i]);
+         BOOST_TEST(test.chain->control->get_action_blacklist() == acct_act_set[i]);
+         BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == key_set[i]);
+      }
+   }
+
+    // local and onchain
+    for (int i = 2; i >= 0; i--) {
+       int j = (i+1)%3;
+
+       test.chain->control->set_actor_whitelist(acct_set[i]);
+       test.chain->control->set_actor_blacklist(acct_set[i]);
+       test.chain->control->set_contract_whitelist(acct_set[i]);
+       test.chain->control->set_contract_blacklist(acct_set[i]);
+       test.chain->control->set_action_blacklist(acct_act_set[i]);
+       test.chain->control->set_key_blacklist(pub_set[i]);
+
+       test.chain->control->set_actor_whitelist(acct_set[j], false);
+       test.chain->control->set_actor_blacklist(acct_set[j], false);
+       test.chain->control->set_contract_whitelist(acct_set[j], false);
+       test.chain->control->set_contract_blacklist(acct_set[j], false);
+       test.chain->control->set_action_blacklist(acct_act_set[j], false);
+       test.chain->control->set_key_blacklist(pub_set[j], false);
+
+//       BOOST_TEST_MESSAGE("local and onchain " <<   " testgroup " << i << " blacklist size: " << merge_set(acct_set[i] , acct_set[j]).size());
+       BOOST_TEST(test.chain->control->get_actor_whitelist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_actor_blacklist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_contract_whitelist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_contract_blacklist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_action_blacklist() == merge_set(acct_act_set[i] , acct_act_set[j]));
+       BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == merge_set(key_set[i] , key_set[j]));
+    }
+/*
+curl http://127.0.0.1:8001/v1/producer/get_whitelist_blacklist
+
+curl -H "Content-type: application/json" -X POST -d '{"actor_whitelist":["eosio","actwhite1","actwhite4","actwhite5"]}'  -v  http://127.0.0.1:8001/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"actor_blacklist":["actblack1","actblack4","actblack5"]}'  -v  http://127.0.0.1:8001/v1/producer/set_whitelist_blacklist
+
+curl -H "Content-type: application/json" -X POST -d '{"contract_blacklist":["codeblack1","codeblack4","codeblack5"]}'  -v  http://127.0.0.1:8001/v1/producer/set_whitelist_blacklist
+
+
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8001 push action eosio setactwhite  '{"accounts":["eosio","actwhite1","actwhite2","actwhite3"]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8001 push action eosio setactblack  '{"accounts":["actblack1","actblack2","actblacks"]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8001 push action eosio setcodewhite  '{"contracts":["codewhite1","codewhite2","codewhite3"]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8001 push action eosio setcodeblack  '{"contracts":["codeblack1","codeblack2","codeblack3"]}' -p eosio
+
+
+curl -H "Content-type: application/json" -X POST -d '{"key_blacklist":["EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi","EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV","EOS7By98EfcCMAKLZFPYY7gxPE4sZiCLo6uJDaet8sZCrXL54Yng2"]}'  -v  http://127.0.0.1:8001/v1/producer/set_whitelist_blacklist
+
+
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8001 push action eosio setkeyblack  '{"keys":["EOS7uG1PmJVHvYbxAsDQsbKRQAd5QNSRrH7nkJVYvZ84XjfQoYVb9","EOS6LeYZ3U3Z8Qk3Kp1CfNp8iqyrSaR6zbwP5BFgexAt7XkK5A4gT","EOS6LeYZ3U3Z8Qk3Kp1CfNp8iqyrSaR6zbwP5BFgexAt7XkK5A4gT"]}' -p eosio
+
+*/
+
+} FC_LOG_AND_RETHROW() }
+
+
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -158,13 +158,21 @@ namespace eosio { namespace chain {
          const flat_set< pair<account_name, action_name> >& get_action_blacklist() const;
          const flat_set<public_key_type>& get_key_blacklist() const;
 
-         void   set_actor_whitelist( const flat_set<account_name>& );
-         void   set_actor_blacklist( const flat_set<account_name>& );
-         void   set_contract_whitelist( const flat_set<account_name>& );
-         void   set_contract_blacklist( const flat_set<account_name>& );
-         void   set_action_blacklist( const flat_set< pair<account_name, action_name> >& );
-         void   set_key_blacklist( const flat_set<public_key_type>& );
+         void   set_actor_whitelist( const flat_set<account_name>&, bool bLocalOrOnchain = true );
+         void   set_actor_blacklist( const flat_set<account_name>&, bool bLocalOrOnchain = true );
+         void   set_contract_whitelist( const flat_set<account_name>&, bool bLocalOrOnchain = true );
+         void   set_contract_blacklist( const flat_set<account_name>&, bool bLocalOrOnchain = true );
+         void   set_action_blacklist( const flat_set< pair<account_name, action_name> >&, bool bLocalOrOnchain = true );
+         void   set_key_blacklist( const flat_set<public_key_type>&, bool bLocalOrOnchain = true );
+   protected:
+         template <typename T>
+         void   udpate_applied_whitelist(bool bAddOrDel,  flat_set<T>& dest, const flat_set<T>& diff);
+         template <typename T>
+         void   udpate_applied_whitelist(bool bAddOrDel,  flat_set<T>& dest, const shared_vector<T>& diff);
+         template <typename T>
+         void   set_onchain_whitelist_and_apply(const flat_set<T>& new_set, shared_vector<T>& db_wb_list, flat_set<T>& apply_wb_list);
 
+   public:
          uint32_t             head_block_num()const;
          time_point           head_block_time()const;
          block_id_type        head_block_id()const;

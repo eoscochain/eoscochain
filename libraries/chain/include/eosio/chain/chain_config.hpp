@@ -105,6 +105,29 @@ struct chain_config {
 
 };
 
+// List on the chain, only allow contract modification
+struct shared_onchain_whiteblacklist_type {
+    shared_onchain_whiteblacklist_type( chainbase::allocator<char> alloc )
+    :sender_bypass_whiteblacklist( alloc ),
+    actor_whitelist( alloc ),
+    actor_blacklist( alloc ),
+    contract_whitelist( alloc ),
+    contract_blacklist( alloc ),
+    action_blacklist( alloc ),
+    key_blacklist( alloc )
+    {}
+
+    shared_vector<account_name>   sender_bypass_whiteblacklist;
+    shared_vector<account_name>   actor_whitelist;
+    shared_vector<account_name>   actor_blacklist;
+    shared_vector<account_name>   contract_whitelist;
+    shared_vector<account_name>   contract_blacklist;
+    shared_vector< pair<account_name, action_name> > action_blacklist;
+    shared_vector<public_key_type> key_blacklist;
+
+    void validate()const;
+};
+
 } } // namespace eosio::chain
 
 FC_REFLECT(eosio::chain::chain_config,
@@ -118,4 +141,9 @@ FC_REFLECT(eosio::chain::chain_config,
            (max_transaction_lifetime)(deferred_trx_expiration_window)(max_transaction_delay)
            (max_inline_action_size)(max_inline_action_depth)(max_authority_depth)
 
+)
+
+FC_REFLECT(eosio::chain::shared_onchain_whiteblacklist_type,
+           (sender_bypass_whiteblacklist)(actor_whitelist)(actor_blacklist)(contract_whitelist)
+           (contract_blacklist)(action_blacklist)(key_blacklist)
 )
