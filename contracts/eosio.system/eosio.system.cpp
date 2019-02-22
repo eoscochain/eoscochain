@@ -191,6 +191,7 @@ namespace eosiosystem {
    }
 
    void system_contract::setmrs( int64_t cpu_us, int64_t net_bytes, int64_t ram_bytes){
+      require_auth(_self);
       set_minimum_resource_security(ram_bytes, net_bytes, cpu_us);
    }
 
