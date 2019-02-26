@@ -104,7 +104,15 @@ struct chain_config {
    friend inline bool operator !=( const chain_config& lhs, const chain_config& rhs ) { return !(lhs == rhs); }
 
 };
+struct chain_config2 {
+   chain_config2( chainbase::allocator<char> alloc )
+      :actor_blacklist(alloc),resource_greylist(alloc){}
 
+   shared_vector<name>  actor_blacklist;
+   shared_vector<name>  resource_greylist;
+
+   void validate()const;
+};
 } } // namespace eosio::chain
 
 FC_REFLECT(eosio::chain::chain_config,
@@ -119,3 +127,4 @@ FC_REFLECT(eosio::chain::chain_config,
            (max_inline_action_size)(max_inline_action_depth)(max_authority_depth)
 
 )
+FC_REFLECT( eosio::chain::chain_config2, (actor_blacklist)(resource_greylist) )

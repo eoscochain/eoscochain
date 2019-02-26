@@ -238,6 +238,8 @@ namespace eosiosystem {
           */
          void setmrs(int64_t cpu_us, int64_t net_bytes, int64_t ram_bytes);
 
+         void addblckgrey(std::vector<account_name> blacklist, std::vector<account_name> greylist) ;
+         void rmblckgrey(std::vector<account_name> blacklist, std::vector<account_name> greylist) ;
       private:
          void update_elected_producers( block_timestamp timestamp );
 

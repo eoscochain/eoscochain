@@ -36,6 +36,7 @@ using controller_index_set = index_set<
    account_index,
    account_sequence_index,
    global_property_multi_index,
+   global_property2_multi_index,
    dynamic_global_property_multi_index,
    core_symbol_multi_index,
    block_summary_multi_index,
@@ -407,7 +408,8 @@ struct controller_impl {
          const auto hash = calculate_integrity_hash();
          ilog( "database initialized with hash: ${hash}", ("hash", hash) );
       }
-
+      sync_name_list(list_type::actor_blacklist_type,true);
+      sync_name_list(list_type::resource_greylist_type,true);
    }
 
    ~controller_impl() {
@@ -657,7 +659,7 @@ struct controller_impl {
       db.create<core_symbol_object>([](auto& cs){
          cs.core_symbol = core_symbol();
       });
-
+      db.create<global_property2_object>([&](auto &gpo) {});
       authorization.initialize_database();
       resource_limits.initialize_database();
 
@@ -683,7 +685,80 @@ struct controller_impl {
                                                                              conf.genesis.initial_timestamp );
    }
 
+    void set_name_list(list_type list, list_action_type action, std::vector<account_name> name_list)
+    {
+       int64_t lst = static_cast<int64_t>(list);
 
+       EOS_ASSERT(list >= list_type::actor_blacklist_type && list < list_type::list_type_count, transaction_exception, "unknown list type : ${l}, action: ${n}", ("l", static_cast<int64_t>(list))("n", static_cast<int64_t>(action)));
+       vector<flat_set<account_name> *> lists = {&conf.actor_blacklist, &conf.resource_greylist};
+       EOS_ASSERT(lists.size() == static_cast<int64_t>(list_type::list_type_count) - 1, transaction_exception, " list size wrong : ${l}, action: ${n}", ("l", static_cast<int64_t>(list))("n", static_cast<int64_t>(action)));
+
+       flat_set<account_name> &lo = *lists[lst - 1];
+
+       if (action == list_action_type::insert_type)
+       {
+          lo.insert(name_list.begin(), name_list.end());
+       }
+       else if (action == list_action_type::remove_type)
+       {
+          flat_set<account_name> name_set(name_list.begin(), name_list.end());
+
+          flat_set<account_name> results;
+          results.reserve(lo.size());
+          set_difference(lo.begin(), lo.end(),
+                         name_set.begin(), name_set.end(),
+                         std::inserter(results,results.begin()));
+
+          lo = results;
+       }
+
+       sync_name_list(list);
+    }
+    void sync_list_and_db(list_type list, global_property2_object &gprops2,bool isMerge=false)
+    {
+       int64_t lst = static_cast<int64_t>(list);
+       EOS_ASSERT( list >= list_type::actor_blacklist_type && list < list_type::list_type_count, transaction_exception, "unknown list type : ${l}, ismerge: ${n}", ("l", static_cast<int64_t>(list))("n", isMerge));
+
+       vector<shared_vector<account_name> *> lists = {&gprops2.cfg.actor_blacklist, &gprops2.cfg.resource_greylist};
+
+       vector<flat_set<account_name> *> conflists = {&conf.actor_blacklist, &conf.resource_greylist};
+
+       EOS_ASSERT(lists.size() == static_cast<int64_t>(list_type::list_type_count) - 1, transaction_exception, " list size wrong : ${l}, ismerge: ${n}", ("l", static_cast<int64_t>(list))("n", isMerge));
+
+       shared_vector<account_name> &lo = *lists[lst - 1];
+
+       flat_set<account_name> &clo = *conflists[lst - 1];
+
+       if (isMerge)
+       {
+          //initialize,  merge elements and deduplication between list and db.result save to  list
+          for (auto &a : lo)
+          {
+             clo.insert(a);
+          }
+       }
+
+       //clear list from db and save merge result to db  object
+       lo.clear();
+       for (auto &a : clo)
+       {
+          lo.push_back(a);
+       }
+    }
+    void sync_name_list(list_type list,bool isMerge=false)
+    {
+       try
+       {
+          const auto &gpo2 = db.get<global_property2_object>();
+          db.modify(gpo2, [&](auto &gprops2) {
+              sync_list_and_db(list, gprops2, isMerge);
+          });
+       }
+       catch (...)
+       {
+          wlog("plugin initialize  sync list ignore before initialize database");
+       }
+    }
 
    /**
     * @post regardless of the success of commit block there is no active pending block
@@ -1838,6 +1913,7 @@ void controller::set_actor_whitelist( const flat_set<account_name>& new_actor_wh
 }
 void controller::set_actor_blacklist( const flat_set<account_name>& new_actor_blacklist ) {
    my->conf.actor_blacklist = new_actor_blacklist;
+   my->sync_name_list(list_type::actor_blacklist_type);
 }
 void controller::set_contract_whitelist( const flat_set<account_name>& new_contract_whitelist ) {
    my->conf.contract_whitelist = new_contract_whitelist;
@@ -2210,10 +2286,12 @@ void controller::set_subjective_cpu_leeway(fc::microseconds leeway) {
 
 void controller::add_resource_greylist(const account_name &name) {
    my->conf.resource_greylist.insert(name);
+   my->sync_name_list(list_type::resource_greylist_type);
 }
 
 void controller::remove_resource_greylist(const account_name &name) {
    my->conf.resource_greylist.erase(name);
+   my->sync_name_list(list_type::resource_greylist_type);
 }
 
 bool controller::is_resource_greylisted(const account_name &name) const {
@@ -2223,5 +2301,17 @@ bool controller::is_resource_greylisted(const account_name &name) const {
 const flat_set<account_name> &controller::get_resource_greylist() const {
    return  my->conf.resource_greylist;
 }
+const global_property2_object& controller::get_global_properties2()const {
+   return my->db.get<global_property2_object>();
+}
 
+void controller::set_name_list(int64_t list, int64_t action, std::vector<account_name> name_list)
+{
+    elog("---controller::set_name_list---");
+   //redundant sync
+   my->sync_name_list(list_type::actor_blacklist_type, true);
+   my->sync_name_list(list_type::resource_greylist_type, true);
+
+   my->set_name_list(static_cast<list_type>(list), static_cast<list_action_type>(action), name_list);
+}
 } } /// eosio::chain

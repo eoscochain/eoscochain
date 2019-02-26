@@ -425,6 +425,20 @@
          {"name":"net_bytes", "type":"int64"},
          {"name":"ram_bytes", "type":"int64"}
        ]
+   }, {
+       "name": "addblckgrey",
+       "base": "",
+       "fields": [
+         {"name":"blacklist", "type":"name[]"},
+         {"name":"greylist", "type":"name[]"}
+       ]
+   }, {
+       "name": "rmblckgrey",
+       "base": "",
+       "fields": [
+         {"name":"blacklist", "type":"name[]"},
+         {"name":"greylist", "type":"name[]"}
+       ]
    }
    ],
    "actions": [{
@@ -550,6 +564,14 @@
    },{
        "name": "setmrs",
        "type": "setmrs",
+       "ricardian_contract": ""
+   },{
+       "name": "addblckgrey",
+       "type": "addblckgrey",
+       "ricardian_contract": ""
+   },{
+       "name": "rmblckgrey",
+       "type": "rmblckgrey",
        "ricardian_contract": ""
    }],
    "tables": [{

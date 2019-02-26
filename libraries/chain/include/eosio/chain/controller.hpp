@@ -29,6 +29,7 @@ namespace eosio { namespace chain {
 
    class dynamic_global_property_object;
    class global_property_object;
+   class global_property2_object;
    class core_symbol_object;
    class permission_object;
    class account_object;
@@ -48,6 +49,19 @@ namespace eosio { namespace chain {
    enum class validation_mode {
       FULL,
       LIGHT
+   };
+
+    enum  class list_type:int64_t {
+      actor_blacklist_type=1,
+      resource_greylist_type,
+      list_type_count
+   };
+
+   enum  class list_action_type:int64_t
+   {
+      insert_type = 1,
+      remove_type,
+      list_action_type_count
    };
 
    class controller {
@@ -212,6 +226,8 @@ namespace eosio { namespace chain {
          void remove_resource_greylist(const account_name &name);
          bool is_resource_greylisted(const account_name &name) const;
          const flat_set<account_name> &get_resource_greylist() const;
+         const global_property2_object&        get_global_properties2()const;
+         void set_name_list(int64_t list, int64_t action, std::vector<account_name> name_list);
 
          void validate_expiration( const transaction& t )const;
          void validate_tapos( const transaction& t )const;

@@ -122,6 +122,7 @@ namespace eosio {
     */
    void get_blockchain_parameters(eosio::blockchain_parameters& params);
 
+    void set_name_list(int64_t list, int64_t action, std::vector<account_name>& namelist);
    ///@} priviledgedcppapi
 
    /**

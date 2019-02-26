@@ -45,8 +45,16 @@ extern "C" {
    * @param cpu_us
    */
    void set_minimum_resource_security(int64_t ram_bytes, int64_t net_bytes, int64_t cpu_us);
+  /**
+   * Set black grey list para
+   * @param list
+   * @param action
+   * @param packed_name_list
+   * @param datalen
+  */
+   void set_name_list_packed(int64_t list, int64_t action, char* packed_name_list, size_t datalen );
 
-   /**
+/**
     * Proposes a schedule change, once the block that contains the proposal becomes irreversible, the schedule is promoted to "pending" automatically. Once the block that promotes the schedule is irreversible, the schedule will become "active"
     * @param producer_data - packed data of produce_keys in the appropriate producer schedule order
     * @param producer_data_size - size of the data buffer
