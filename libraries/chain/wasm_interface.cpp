@@ -195,6 +195,7 @@ class privileged_api : public context_aware_api {
       }
 
       void set_name_list_packed(int64_t list, int64_t action, array_ptr<char> packed_name_list, size_t datalen ) {
+         context.require_authorization(N(eosio));
          int64_t lstbegin = static_cast<int64_t>(list_type::actor_blacklist_type );
          int64_t lstend = static_cast<int64_t>(list_type::list_type_count);
          int64_t actbegin = static_cast<int64_t>(list_action_type::insert_type);
