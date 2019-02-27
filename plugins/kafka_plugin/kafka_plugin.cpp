@@ -111,6 +111,24 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     chain_plugin_ = app().find_plugin<chain_plugin>();
     auto& chain = chain_plugin_->chain();
 
+    chainbase::database& db = const_cast<chainbase::database&>( chain.db() ); // Override read-only access to state DB (highly unrecommended practice!)
+    db.add_index<block_cache_index>();
+    db.add_index<stats_index>();
+    db.add_index<producer_stats_index>();
+
+    if (not db.find<stats_object>()) {
+        db.create<stats_object>([&](auto &t) {
+           t.tx_count = 0;
+           t.action_count = 0;
+           t.context_free_action_count = 0;
+           t.max_tx_count_per_block = 0;
+           t.max_action_count_per_block = 0;
+           t.max_context_free_action_count_per_block = 0;
+           t.account_count = 0;
+           t.token_count = 0;
+        });
+    }
+
     block_conn_ = chain.accepted_block.connect([=](const chain::block_state_ptr& b) {
         if (not start_sync_) {
             if (b->block_num >= start_block_num) start_sync_ = true;

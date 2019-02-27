@@ -68,20 +68,84 @@ void kafka::stop() {
     producer_.reset();
 }
 
+chainbase::database& get_db() {
+    auto plugin = app().find_plugin<chain_plugin>();
+    auto& chain = plugin->chain();
+    return const_cast<chainbase::database&>(chain.db()); // Override read-only access to state DB (highly unrecommended practice!)
+}
+
 void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversible) {
     auto id = checksum_bytes(block_state->id);
 
-    if (irreversible) {
-        IrreversibleBlock b{id, block_state->block_num};
+    auto& db = get_db();
+
+    if (irreversible and block_state->block_num > 1) { // block 1 only occurred as irreversible block
+        auto bc = db.get<block_cache_object, by_block_id>(block_state->id);
+        Block b = fc::json::from_string(string(bc.block.cbegin(), bc.block.cend())).as<Block>();
+
+        // remove all previous cached blocks
+        auto& idx = db.get_mutable_index<block_cache_index>();
+        const auto& index = idx.indices().get<by_block_num>();
+        while ((not index.empty()) and index.begin()->block_num() <= block_state->block_num) {
+            idx.remove(*index.begin());
+        }
+
+        b.lib = true;
         auto payload = fc::json::to_string(b, fc::json::legacy_generator);
-        auto num_str = std::to_string(b.num);
-        Buffer buffer (num_str.data(), num_str.size());
+        Buffer buffer (b.id.data(), b.id.size());
         producer_->produce(MessageBuilder(topic_).partition(partition_).key(buffer).payload(payload));
         return;
     }
 
     const auto& header = block_state->header;
     auto b = std::make_shared<Block>();
+
+    {
+        ++producer_stats_interval_; // increase counter
+
+        if (not producer_schedule_) { // initial set producer schedule
+            producer_schedule_ = std::make_unique<producer_schedule>();
+            producer_schedule_->version = block_state->active_schedule.version;
+            for (const auto& p: block_state->active_schedule.producers) {
+                producer_schedule_->producers.push_back(p.producer_name);
+            }
+        } else if (block_state->active_schedule.version > producer_schedule_->version or // must stats when producer schedule changed
+                    producer_stats_interval_ >= producer_schedule_->producers.size() * config::producer_repetitions) { // trigger stats every producing loop
+            producer_stats_interval_ = 0; // reset counter
+
+            for (const auto& p: producer_schedule_->producers) {
+                auto ps = db.get<producer_stats_object, by_producer>(p);
+                b->producer_stats.push_back(ProducerStats{
+                    .producer = ps.producer,
+                    .produced_blocks = ps.produced_blocks,
+                    .unpaid_blocks = ps.unpaid_blocks
+                });
+            }
+
+            if (block_state->active_schedule.version > producer_schedule_->version) { // update producer schedule
+                producer_schedule_->version = block_state->active_schedule.version;
+                producer_schedule_->producers.clear(); // clear old producers
+                for (const auto &p: block_state->active_schedule.producers) {
+                    producer_schedule_->producers.push_back(p.producer_name);
+                }
+            }
+        }
+
+        auto p = db.find<producer_stats_object, by_producer>(header.producer);
+        if (not p) {
+            db.create<producer_stats_object>([&](auto &p) {
+                p.producer = header.producer;
+                p.produced_blocks = 1;
+                p.unpaid_blocks = 1;
+                p.claimed_rewards = asset();
+            });
+        } else {
+            db.modify(*p, [&](producer_stats_object &p) {
+               p.produced_blocks += 1;
+               p.unpaid_blocks += 1;
+            });
+        }
+    }
 
     b->id = id;
     b->num = block_state->block_num;
@@ -101,9 +165,50 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
     cached_traces_.clear();
     cached_actions_.clear();
 
+    {
+        const auto& s = db.get<stats_object>();
+        db.modify(s, [&](stats_object &s) {
+           s.tx_count += b->tx_count;
+           s.action_count += b->action_count;
+           s.context_free_action_count += b->context_free_action_count;
+           if (b->tx_count > s.max_tx_count_per_block) {
+               s.max_tx_count_per_block = b->tx_count;
+           }
+           if (b->action_count > s.max_action_count_per_block) {
+               s.max_action_count_per_block = b->action_count;
+           }
+           if (b->context_free_action_count > s.max_context_free_action_count_per_block) {
+               s.max_context_free_action_count_per_block = b->context_free_action_count;
+           }
+
+           b->stats.tx_count = s.tx_count;
+           b->stats.action_count = s.action_count;
+           b->stats.context_free_action_count = s.context_free_action_count;
+           b->stats.max_tx_count_per_block = s.max_tx_count_per_block;
+           b->stats.max_action_count_per_block = s.max_action_count_per_block;
+           b->stats.max_context_free_action_count_per_block = s.max_context_free_action_count_per_block;
+           b->stats.account_count = s.account_count;
+           b->stats.token_count = s.token_count;
+        });
+    }
+
     auto payload = fc::json::to_string(*b, fc::json::legacy_generator);
     Buffer buffer (b->id.data(), b->id.size());
     producer_->produce(MessageBuilder(topic_).partition(partition_).key(buffer).payload(payload));
+
+    if (block_state->block_num > 1) { // block 1 only occurred as irreversible block
+        auto bc = db.find<block_cache_object, by_block_id>(block_state->id);
+        if (not bc) {
+            db.create<block_cache_object>([&](auto &bc) {
+               bc.block_id = block_state->id;
+               bc.block.assign(payload.cbegin(), payload.cend());
+            });
+        } else {
+            db.modify(*bc, [&](block_cache_object &bc) {
+               bc.block.assign(payload.cbegin(), payload.cend());
+            });
+        }
+    }
 }
 
 std::pair<uint32_t, uint32_t> kafka::push_transaction(const chain::transaction_receipt& tx_receipt, const BlockPtr& block, uint16_t block_seq) {
@@ -178,6 +283,9 @@ void kafka::push_transaction_trace(const chain::transaction_trace_ptr& tx_trace)
 }
 
 asset get_ram_price();
+voter_info get_voter(const name &voter);
+vector<producer_info> get_producers(const vector<name>& producers);
+void get_voters(const name& from, vector<voter>& voters);
 
 void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent_seq) {
     auto a = std::make_shared<Action>();
@@ -199,6 +307,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     if (not action_trace.console.empty()) a->console = action_trace.console;
 
     bool has_ram_deal = false;
+    bool has_claimed_rewards = false;
 
     // get any extra data
     if (a->account == a->receiver) { // only once
@@ -206,6 +315,14 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
 
         if (a->account == N(eosio)) {
             switch (a->name) {
+                case N(newaccount): {
+                    auto& db = get_db();
+                    const auto& s = db.get<stats_object>();
+                    db.modify(s, [&](stats_object &s) {
+                        s.account_count += 1;
+                    });
+                    break;
+                }
                 case N(setabi): {
                     const auto setabi = action_trace.act.data_as<chain::setabi>();
                     auto& chain = app().find_plugin<chain_plugin>()->chain();
@@ -255,11 +372,83 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     has_ram_deal = true;
                     break;
                 }
+                case N(delegatebw): {
+                    const auto db = fc::raw::unpack<delegatebw>(data);
+                    const auto& from = db.transfer ? db.receiver : db.from;
+                    vector<voter> result;
+                    get_voters(from, result);
+                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                    // ilog("delegatebw: ${extra}", ("extra", a->extra));
+                    break;
+                }
+                case N(undelegatebw): {
+                    const auto ub = fc::raw::unpack<undelegatebw>(data);
+                    vector<voter> result;
+                    get_voters(ub.from, result);
+                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                    // ilog("undelegatebw: ${extra}", ("extra", a->extra));
+                    break;
+                }
+                case N(voteproducer): {
+                    const auto vp = fc::raw::unpack<voteproducer>(data);
+                    vector<voter> result;
+                    get_voters(vp.voter, result);
+                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                    // ilog("voteproducer: ${extra}", ("extra", a->extra));
+                    break;
+                }
+                case N(regproxy): {
+                    const auto rp = fc::raw::unpack<regproxy>(data);
+                    vector<voter> result;
+                    get_voters(rp.proxy, result);
+                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                    // ilog("regproxy: ${extra}", ("extra", a->extra));
+                    break;
+                }
+                case N(regproducer): {
+                    const auto rp = fc::raw::unpack<regproducer>(data);
+
+                    auto& db = get_db();
+                    auto p = db.find<producer_stats_object, by_producer>(rp.producer);
+                    if (not p) {
+                        db.create<producer_stats_object>([&](auto &p) {
+                           p.producer = rp.producer;
+                           p.produced_blocks = 0;
+                           p.unpaid_blocks = 0;
+                           p.claimed_rewards = asset();
+                        });
+                    }
+
+                    break;
+                }
+                case N(unregprod): {
+                    // const auto up = fc::raw::unpack<unregprod>(data);
+                    break;
+                }
+                case N(rmvproducer): {
+                    // const auto rp = fc::raw::unpack<rmvproducer>(data);
+                    break;
+                }
+                case N(claimrewards): {
+                    const auto cr = fc::raw::unpack<claimrewards>(data);
+                    cached_claimed_rewards_[a->global_seq] = claimed_rewards{
+                        .owner = cr.owner,
+                        .quantity = asset()
+                    };
+                    has_claimed_rewards = true;
+                    break;
+                }
             }
         } else if (a->name == N(create) and is_token(a->account)) {
             try {
                 const auto create_data = fc::raw::unpack<create>(data);
                 a->extra = fc::json::to_string(create_data, fc::json::legacy_generator);
+
+                auto& db = get_db();
+                const auto& s = db.get<stats_object>();
+                db.modify(s, [&](stats_object &s) {
+                   s.token_count += 1;
+                });
             } catch (...) {
                 // ignore any error of unpack
             }
@@ -286,6 +475,11 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     } else if (transfer_data.to == N(eosio.ramfee)) { // sell
                         auto it = cached_ram_deals_.find(a->parent_seq);
                         if (it != cached_ram_deals_.end()) it->second.quantity -= transfer_data.quantity;
+                    } else if (transfer_data.from == N(eosio.bpay) or transfer_data.from == N(eosio.vpay)) { // producer block/vote pay
+                        auto it = cached_claimed_rewards_.find(a->parent_seq);
+                        if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
+                            it->second.quantity += transfer_data.quantity;
+                        }
                     }
                 }
             } catch (...) {
@@ -307,7 +501,37 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
         }
     }
 
-    if (parent_seq == 0 and not cached_ram_deals_.empty()) cached_ram_deals_.clear();
+    if (has_claimed_rewards) {
+        auto it = cached_claimed_rewards_.find(a->global_seq);
+        if (it != cached_claimed_rewards_.end()) {
+            auto plugin = app().find_plugin<chain_plugin>();
+            auto& chain = plugin->chain();
+            chainbase::database& db = const_cast<chainbase::database&>(chain.db()); // Override read-only access to state DB (highly unrecommended practice!)
+
+            auto p = db.find<producer_stats_object, by_producer>(it->second.owner);
+            if (not p) {
+                db.create<producer_stats_object>([&](auto &ps) {
+                    ps.producer = it->second.owner;
+                    ps.produced_blocks = 0;
+                    ps.unpaid_blocks = 0;
+                    ps.claimed_rewards = it->second.quantity;
+                });
+            } else {
+                it->second.quantity += p->claimed_rewards; // add
+                db.modify(*p, [&](producer_stats_object &ps) {
+                    ps.claimed_rewards = it->second.quantity;
+                    ps.unpaid_blocks = 0; // reset when claim rewards
+                });
+            }
+
+            a->extra = fc::json::to_string(it->second, fc::json::legacy_generator);
+        }
+    }
+
+    if (parent_seq == 0) {
+        if (not cached_ram_deals_.empty()) cached_ram_deals_.clear();
+        if (not cached_claimed_rewards_.empty()) cached_claimed_rewards_.clear();
+    }
 }
 
 bool kafka::is_token(name account) {
@@ -423,6 +647,69 @@ asset get_ram_price() {
     */
 
     return asset(static_cast<int64_t>(price), quote_balance.get_symbol());
+}
+
+voter_info get_voter(const name &voter) {
+    auto& chain = app().get_plugin<chain_plugin>();
+    auto ro_api = chain.get_read_only_api();
+
+    chain_apis::read_only::get_table_rows_params p;
+    p.json = false;
+    p.code = N(eosio);
+    p.scope = "eosio";
+    p.table = "voters";
+    p.limit = 1;
+    p.lower_bound = voter.to_string();
+    auto voters = ro_api.get_table_rows(p);
+    EOS_ASSERT(not voters.rows.empty(), chain::contract_exception, "missing voters");
+    auto& row = voters.rows.front();
+
+    return fc::raw::unpack<voter_info>(row.as<vector<char>>());
+}
+
+vector<producer_info> get_producers(const vector<name>& producers) {
+    auto& chain = app().get_plugin<chain_plugin>();
+    auto ro_api = chain.get_read_only_api();
+
+    vector<string> ps;
+    ps.reserve(producers.size());
+    for (auto& p: producers) {
+        ps.push_back(p.to_string());
+    }
+
+    auto r = ro_api.get_producers_by_names(chain_apis::read_only::get_producers_by_names_params{.producers = ps});
+
+    vector<producer_info> result;
+    result.reserve(r.size());
+    for (auto& p: r) {
+        result.push_back(fc::raw::unpack<producer_info>(p.as<vector<char>>()));
+    }
+    for (size_t i = 0; i < result.size(); ++i) {
+        EOS_ASSERT(result[i].owner == producers[i], chain::contract_exception, "inconsistent producer name");
+    }
+    return result;
+}
+
+void get_voters(const name& from, vector<voter>& voters) {
+    auto v = get_voter(from);
+
+    voter result{
+       .owner = v.owner, .proxy = v.proxy, .staked = v.staked, .last_vote_weight = v.last_vote_weight,
+       .proxied_vote_weight = v.proxied_vote_weight, .is_proxy = v.is_proxy
+    };
+    if (not v.producers.empty()) {
+        auto producers = get_producers(v.producers);
+        result.producers.reserve(producers.size());
+        for (auto& p: producers) {
+            result.producers.push_back(producer{.owner = p.owner, .total_votes = p.total_votes});
+        }
+    }
+
+    voters.push_back(fc::move(result));
+
+    if (v.proxy) {
+        get_voters(v.proxy, voters);
+    }
 }
 
 }

@@ -12,11 +12,32 @@ using eosio::chain::block_timestamp_type;
 struct Transaction;
 struct Action;
 
+// total transaction stats
+struct Stats {
+   uint64_t tx_count;
+   uint64_t action_count;
+   uint64_t context_free_action_count;
+   uint32_t max_tx_count_per_block;
+   uint32_t max_action_count_per_block;
+   uint32_t max_context_free_action_count_per_block;
+   uint32_t account_count;
+   uint32_t token_count;
+};
+
+// total producer stats
+struct ProducerStats {
+   name_t producer;
+   uint32_t produced_blocks = 0;
+   uint32_t unpaid_blocks = 0;
+};
+
 struct Block {
    bytes id;
    unsigned num;
 
    block_timestamp_type timestamp;
+
+   bool lib = false; // whether irreversible
 
    bytes block;
 
@@ -26,6 +47,8 @@ struct Block {
 
    std::vector<Transaction> transactions;
    std::vector<Action> actions;
+   Stats stats;
+   std::vector<ProducerStats> producer_stats;
 };
 
 struct IrreversibleBlock {
@@ -89,7 +112,11 @@ using ActionPtr = std::shared_ptr<Action>;
 }
 
 FC_REFLECT_ENUM(kafka::TransactionStatus, (executed)(soft_fail)(hard_fail)(delayed)(expired)(unknown))
-FC_REFLECT(kafka::Block, (id)(num)(timestamp)(block)(tx_count)(action_count)(context_free_action_count)(transactions)(actions))
+FC_REFLECT(kafka::Stats, (tx_count)(action_count)(context_free_action_count)
+                         (max_tx_count_per_block)(max_action_count_per_block)(max_context_free_action_count_per_block)
+                         (account_count)(token_count))
+FC_REFLECT(kafka::ProducerStats, (producer)(produced_blocks)(unpaid_blocks))
+FC_REFLECT(kafka::Block, (id)(num)(timestamp)(lib)(block)(tx_count)(action_count)(context_free_action_count)(transactions)(actions)(stats)(producer_stats))
 FC_REFLECT(kafka::IrreversibleBlock, (id)(num))
 FC_REFLECT(kafka::Transaction, (id)(block_id)(block_num)(block_time)(block_seq)(status)(net_usage_words)
                                (cpu_usage_us)(exception)(action_count)(context_free_action_count))

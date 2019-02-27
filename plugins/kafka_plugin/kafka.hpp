@@ -40,9 +40,14 @@ private:
     std::unordered_map<transaction_id_type, chain::transaction_trace_ptr> cached_traces_;
     std::unordered_map<transaction_id_type, vector<ActionPtr>> cached_actions_;
 
+    int producer_stats_interval_ = 0;
+    std::unique_ptr<producer_schedule> producer_schedule_;
+
     std::unordered_set<name> cached_tokens_;
 
     std::unordered_map<uint64_t, ram_deal> cached_ram_deals_;
+
+    std::unordered_map<uint64_t, claimed_rewards> cached_claimed_rewards_;
 };
 
 }
