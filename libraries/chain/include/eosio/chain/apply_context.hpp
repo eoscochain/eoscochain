@@ -1,6 +1,6 @@
 /**
  *  @file
- *  @copyright defined in eos/LICENSE.txt
+ *  @copyright defined in eos/LICENSE
  */
 #pragma once
 #include <eosio/chain/controller.hpp>
@@ -572,7 +572,7 @@ class apply_context {
       uint64_t next_recv_sequence( account_name receiver );
       uint64_t next_auth_sequence( account_name actor );
 
-      void add_ram_usage( account_name account, int64_t ram_delta );
+      void add_ram_usage( account_name account, int64_t ram_delta, bool includes_mrs_ram = true );
       void finalize_trace( action_trace& trace, const fc::time_point& start );
 
    /// Fields:

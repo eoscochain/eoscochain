@@ -521,9 +521,8 @@ int apply_context::db_store_i64( uint64_t code, uint64_t scope, uint64_t table, 
    const auto& obj = db.create<key_value_object>( [&]( auto& o ) {
       o.t_id        = tableid;
       o.primary_key = id;
-      o.value.resize( buffer_size );
+      o.value.assign( buffer, buffer_size );
       o.payer       = payer;
-      memcpy( o.value.data(), buffer, buffer_size );
    });
 
    db.modify( tab, [&]( auto& t ) {
@@ -562,8 +561,7 @@ void apply_context::db_update_i64( int iterator, account_name payer, const char*
    }
 
    db.modify( obj, [&]( auto& o ) {
-     o.value.resize( buffer_size );
-     memcpy( o.value.data(), buffer, buffer_size );
+     o.value.assign( buffer, buffer_size );
      o.payer = payer;
    });
 }
@@ -727,8 +725,8 @@ uint64_t apply_context::next_auth_sequence( account_name actor ) {
    return rs.auth_sequence;
 }
 
-void apply_context::add_ram_usage( account_name account, int64_t ram_delta ) {
-   trx_context.add_ram_usage( account, ram_delta );
+void apply_context::add_ram_usage( account_name account, int64_t ram_delta, bool includes_mrs_ram ) {
+   trx_context.add_ram_usage( account, ram_delta, includes_mrs_ram );
 
    auto p = _account_ram_deltas.emplace( account, ram_delta );
    if( !p.second ) {

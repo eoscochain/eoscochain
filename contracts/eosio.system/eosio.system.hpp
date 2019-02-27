@@ -1,6 +1,6 @@
 /**
  *  @file
- *  @copyright defined in eos/LICENSE.txt
+ *  @copyright defined in eos/LICENSE
  */
 #pragma once
 
@@ -229,6 +229,14 @@ namespace eosiosystem {
          void bidname( account_name bidder, account_name newname, asset bid );
 
          void setglobal( std::string name, std::string value );
+
+         /**
+          * Set Minimal Resource Security (MRS) parameters.
+          * @param cpu_us
+          * @param net_bytes
+          * @param ram_bytes
+          */
+         void setmrs(int64_t cpu_us, int64_t net_bytes, int64_t ram_bytes);
 
       private:
          void update_elected_producers( block_timestamp timestamp );

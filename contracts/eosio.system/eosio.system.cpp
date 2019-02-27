@@ -190,6 +190,10 @@ namespace eosiosystem {
       }
    }
 
+   void system_contract::setmrs( int64_t cpu_us, int64_t net_bytes, int64_t ram_bytes){
+      set_minimum_resource_security(ram_bytes, net_bytes, cpu_us);
+   }
+
    /**
     *  Called after a new account is created. This code enforces resource-limits rules
     *  for new accounts as well as new account naming conventions.
@@ -244,7 +248,7 @@ EOSIO_ABI( eosiosystem::system_contract,
      // native.hpp (newaccount definition is actually in eosio.system.cpp)
      (newaccount)(updateauth)(deleteauth)(linkauth)(unlinkauth)(canceldelay)(onerror)
      // eosio.system.cpp
-     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setglobal)
+     (setram)(setparams)(setpriv)(rmvproducer)(bidname)(setglobal)(setmrs)
      // delegate_bandwidth.cpp
      (buyrambytes)(buyram)(sellram)(delegatebw)(undelegatebw)(refund)
      // voting.cpp

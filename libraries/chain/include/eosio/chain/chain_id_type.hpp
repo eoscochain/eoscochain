@@ -1,6 +1,6 @@
 /**
  *  @file
- *  @copyright defined in eos/LICENSE.txt
+ *  @copyright defined in eos/LICENSE
  */
 #pragma once
 
@@ -36,7 +36,7 @@ namespace chain {
         return ds;
       }
 
-      void reflector_verify()const;
+      void reflector_init()const;
 
       private:
          // Some exceptions are unfortunately necessary:

@@ -1,6 +1,6 @@
 /**
  *  @file
- *  @copyright defined in eos/LICENSE.txt
+ *  @copyright defined in eos/LICENSE
  */
 #pragma once
 #include <eosiolib/system.h>
@@ -120,6 +120,8 @@ extern "C" {
    void require_auth2( account_name name, permission_name permission );
 
    bool is_account( account_name name );
+
+   bool is_inline();
 
    /**
     *  Send an inline action in the context of this action's parent transaction
