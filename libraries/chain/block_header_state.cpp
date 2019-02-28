@@ -143,7 +143,7 @@ namespace eosio { namespace chain {
    */
   block_header_state block_header_state::next( const signed_block_header& h, bool skip_validate_signee )const {
     EOS_ASSERT( h.timestamp != block_timestamp_type(), block_validate_exception, "", ("h",h) );
-    EOS_ASSERT( h.header_extensions.size() == 0, block_validate_exception, "no supported extensions" );
+    // EOS_ASSERT( h.header_extensions.size() == 0, block_validate_exception, "no supported extensions" );
 
     EOS_ASSERT( h.timestamp > header.timestamp, block_validate_exception, "block must be later in time" );
     EOS_ASSERT( h.previous == id, unlinkable_block_exception, "block must link to current state" );
@@ -172,6 +172,7 @@ namespace eosio { namespace chain {
 
     result.header.action_mroot       = h.action_mroot;
     result.header.transaction_mroot  = h.transaction_mroot;
+    result.header.header_extensions  = h.header_extensions;
     result.header.producer_signature = h.producer_signature;
     result.id                        = result.header.id();
 

@@ -28,5 +28,13 @@ namespace eosio { namespace chain {
       return result;
    }
 
+   void block_header::set_block_extensions_hash(const digest_type& hash)
+   {
+      header_extensions.emplace_back();
+      auto& h = header_extensions.back();
+      h.first = static_cast<uint16_t>(block_header_extension_type::block_extensions_hash);
+      h.second.resize(hash.data_size());
+      std::copy(hash.data(), hash.data() + hash.data_size(), h.second.data());
+   }
 
 } }
