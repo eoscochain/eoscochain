@@ -13,6 +13,7 @@
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/core_symbol_object.hpp>
 #include <eosio/chain/account_object.hpp>
+#include <eosio/chain/blackwhitelist_object.hpp>
 #include <eosio/chain/symbol.hpp>
 #include <fc/exception/exception.hpp>
 #include <fc/crypto/sha256.hpp>
@@ -169,46 +170,7 @@ class privileged_api : public context_aware_api {
          return context.control.set_proposed_producers( std::move(producers) );
       }
 
-      void set_whiteblack_lists(account_name listtype, array_ptr<char> packed_wb_list, size_t datalen)
-      {
-         datastream<const char*> ds( packed_wb_list, datalen );
-         auto &chain = context.control;
-
-         const auto& get_account_params = [&]() {
-             std::vector<account_name> accounts;
-             fc::raw::unpack(ds, accounts);
-             flat_set<account_name> params(accounts.begin(), accounts.end());
-             return params;
-         };
-
-         const auto& get_pubkey_params = [&](){
-             std::vector<std::string> keys;
-             fc::raw::unpack(ds, keys);
-             flat_set<public_key_type> ret;
-             for (auto& o : keys){
-                ret.insert(public_key_type(o));
-             }
-             return ret;
-         };
-
-
-         if (listtype == N(actorwhite)) {
-            chain.set_actor_whitelist(get_account_params(), false);
-         } else if (listtype == N(actorblack)) {
-            chain.set_actor_blacklist(get_account_params(), false);
-         } else if (listtype == N(codewhite)) {
-            chain.set_contract_whitelist(get_account_params(), false);
-         } else if (listtype == N(codeblack)) {
-            chain.set_contract_blacklist(get_account_params(), false);
-         } else if (listtype == N(keyblack)) {
-            chain.set_key_blacklist(get_pubkey_params(), false);
-         } else {
-            EOS_ASSERT(false, wasm_execution_error, "unkonw type of black white list");
-         }
-      }
-
-
-    uint32_t get_blockchain_parameters_packed( array_ptr<char> packed_blockchain_parameters, size_t buffer_size) {
+      uint32_t get_blockchain_parameters_packed( array_ptr<char> packed_blockchain_parameters, size_t buffer_size) {
          auto& gpo = context.control.get_global_properties();
 
          auto s = fc::raw::pack_size( gpo.configuration );
@@ -256,6 +218,52 @@ class privileged_api : public context_aware_api {
          context.db.modify( a, [&]( auto& ma ){
             ma.privileged = is_priv;
          });
+      }
+
+      void update_blackwhitelist() {
+         auto params = fc::raw::unpack<updtbwlist_params>(context.act.data);
+
+         EOS_ASSERT(params.add.size() or params.rmv.size(), wasm_execution_error, "no item");
+
+         if (params.type == 5) {
+            auto get_action_list = [](const vector<string>& str_list) {
+               flat_set<pair<account_name, action_name>> result;
+               for (const auto& a: str_list) {
+                  auto pos = a.find( "::" );
+                  EOS_ASSERT(pos != std::string::npos, wasm_execution_error, "invalid entry in action-blacklist: '${a}'", ("a", a));
+                  account_name code(a.substr(0, pos));
+                  action_name act(a.substr(pos + 2));
+                  result.emplace(code.value, act.value);
+               }
+               return result;
+            };
+            context.control.update_onchain_action_blacklist(get_action_list(params.add), get_action_list(params.rmv));
+         } else if (params.type == 6) {
+            auto get_key_list = [](const vector<string>& str_list) {
+               flat_set<public_key_type> result;
+               for (const auto& a: str_list) result.emplace(a);
+               return result;
+            };
+            context.control.update_onchain_key_blacklist(get_key_list(params.add), get_key_list(params.rmv));
+         } else {
+            auto get_account_list = [](const vector<string>& str_list) {
+               flat_set<account_name> result;
+               for (const auto& a: str_list) result.emplace(a);
+               return result;
+            };
+            auto add = get_account_list(params.add);
+            auto rmv = get_account_list(params.rmv);
+
+            switch (params.type) {
+               case 0: { context.control.update_onchain_sender_bypass_whitelist(add, rmv); break; }
+               case 1: { context.control.update_onchain_actor_whitelist(add, rmv); break; }
+               case 2: { context.control.update_onchain_actor_blacklist(add, rmv); break; }
+               case 3: { context.control.update_onchain_contract_whitelist(add, rmv); break; }
+               case 4: { context.control.update_onchain_contract_blacklist(add, rmv); break; }
+               default:
+                  EOS_ASSERT(false, wasm_execution_error, "invalid type");
+            }
+         }
       }
 
 };
@@ -1782,7 +1790,7 @@ REGISTER_INTRINSICS(privileged_api,
    (get_resource_limits,              void(int64_t,int,int,int)             )
    (set_resource_limits,              void(int64_t,int64_t,int64_t,int64_t) )
    (set_proposed_producers,           int64_t(int,int)                      )
-   (set_whiteblack_lists,             void(int64_t,int,int)                         )
+   (update_blackwhitelist,            void()                         )
    (get_blockchain_parameters_packed, int(int, int)                         )
    (set_blockchain_parameters_packed, void(int,int)                         )
    (set_minimum_resource_security,    void(int64_t,int64_t,int64_t)         )

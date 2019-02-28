@@ -425,37 +425,8 @@
          {"name":"net_bytes", "type":"int64"},
          {"name":"ram_bytes", "type":"int64"}
        ]
-   }, {
-      "name": "setkeyblack",
-      "base": "",
-      "fields": [
-        {"name":"keys", "type":"string[]"}
-      ]
-   }, {
-      "name": "setactwhite",
-      "base": "",
-      "fields": [
-        {"name":"accounts", "type":"account_name[]"}
-      ]
-    }, {
-       "name": "setactblack",
-       "base": "",
-       "fields": [
-         {"name":"accounts", "type":"account_name[]"}
-       ]
-     }, {
-       "name": "setcodewhite",
-       "base": "",
-       "fields": [
-         {"name":"contracts", "type":"account_name[]"}
-       ]
-    }, {
-     "name": "setcodeblack",
-     "base": "",
-     "fields": [
-       {"name":"contracts", "type":"account_name[]"}
-     ]
-   }],
+   }
+   ],
    "actions": [{
      "name": "newaccount",
      "type": "newaccount",
@@ -579,26 +550,6 @@
    },{
        "name": "setmrs",
        "type": "setmrs",
-       "ricardian_contract": ""
-   },{
-       "name": "setkeyblack",
-       "type": "setkeyblack",
-       "ricardian_contract": ""
-   },{
-       "name": "setactwhite",
-       "type": "setactwhite",
-       "ricardian_contract": ""
-   },{
-       "name": "setactblack",
-       "type": "setactblack",
-       "ricardian_contract": ""
-   },{
-       "name": "setcodewhite",
-       "type": "setcodewhite",
-       "ricardian_contract": ""
-   },{
-       "name": "setcodeblack",
-       "type": "setcodeblack",
        "ricardian_contract": ""
    }],
    "tables": [{

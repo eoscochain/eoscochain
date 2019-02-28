@@ -238,21 +238,6 @@ namespace eosiosystem {
           */
          void setmrs(int64_t cpu_us, int64_t net_bytes, int64_t ram_bytes);
 
-         /**
-          * black white list
-          */
-         // actor
-         void setactwhite(const std::vector<account_name>& accounts);
-         void setactblack(const std::vector<account_name>& accounts);
-         // contract
-         void setcodewhite(const std::vector<account_name>& contracts);
-         void setcodeblack(const std::vector<account_name>& contracts);
-         // public_key
-         void setkeyblack(const std::vector<std::string>& keys);
-      private:
-         void setwblists_impl(const account_name& wb_type);
-
-
       private:
          void update_elected_producers( block_timestamp timestamp );
 

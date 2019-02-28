@@ -108,11 +108,9 @@ extern "C" {
    void activate_feature( int64_t f );
 
    /**
-    * @brief Set blacklist and whitelist ...
-    * @param packed_wb_list
-    * @param datalen
+    * @brief Update black & white list
     */
-   void set_whiteblack_lists(account_name listtype, char* packed_wb_list, uint32_t datalen);
+   void update_blackwhitelist();
 
    ///@ } privilegedcapi
 #ifdef __cplusplus
