@@ -195,7 +195,6 @@ class privileged_api : public context_aware_api {
       }
 
       void set_minimum_resource_security(int64_t ram_bytes, int64_t net_bytes, int64_t cpu_us) {
-         context.require_authorization(N(eosio));
          EOS_ASSERT(cpu_us >= 0, wasm_execution_error, "cpu_us must be >= 0");
          EOS_ASSERT(net_bytes >= 0, wasm_execution_error, "net_bytes must be >= 0");
          EOS_ASSERT(ram_bytes >= 0, wasm_execution_error, "ram_bytes must be >= 0");
