@@ -1841,6 +1841,7 @@ const flat_set<public_key_type>& controller::get_key_blacklist() const {
 
 void controller::set_blackwhitelist() {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   ilog("blackwhitelist: ${bw}", ("bw", bw.blackwhitelist));
 
    auto sender_bypass_whiteblacklist = my->conf.offchain_sender_bypass_whiteblacklist;
    sender_bypass_whiteblacklist.insert(bw.blackwhitelist.sender_bypass_whiteblacklist.cbegin(), bw.blackwhitelist.sender_bypass_whiteblacklist.cend());
