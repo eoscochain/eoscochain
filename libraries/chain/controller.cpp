@@ -660,6 +660,8 @@ struct controller_impl {
          cs.core_symbol = core_symbol();
       });
 
+      db.create<blackwhitelist_object>([](auto&){});
+
       authorization.initialize_database();
       resource_limits.initialize_database();
 
