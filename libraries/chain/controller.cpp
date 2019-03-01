@@ -1836,7 +1836,7 @@ transaction_trace_ptr controller::push_scheduled_transaction( const transaction_
 }
 
 const flat_set<account_name>& controller::get_sender_bypass_whiteblacklist() const {
-  return my->conf.sender_bypass_whiteblacklist;
+   return my->conf.sender_bypass_whiteblacklist;
 }
 const flat_set<account_name>& controller::get_actor_whitelist() const {
    return my->conf.actor_whitelist;
