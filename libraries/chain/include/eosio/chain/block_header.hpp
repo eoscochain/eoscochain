@@ -4,6 +4,10 @@
 
 namespace eosio { namespace chain {
 
+   enum block_header_extension_type : uint16_t {
+      block_extensions_hash = 0 // hash of block extensions
+   };
+
    struct block_header
    {
       block_timestamp_type             timestamp;
@@ -39,6 +43,7 @@ namespace eosio { namespace chain {
       block_id_type     id() const;
       uint32_t          block_num() const { return num_from_id(previous) + 1; }
       static uint32_t   num_from_id(const block_id_type& id);
+      void              set_block_extensions_hash(const digest_type& hash);
    };
 
 
