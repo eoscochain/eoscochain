@@ -13,6 +13,7 @@
 #include <eosio/chain/global_property_object.hpp>
 #include <eosio/chain/core_symbol_object.hpp>
 #include <eosio/chain/account_object.hpp>
+#include <eosio/chain/blackwhitelist_object.hpp>
 #include <eosio/chain/symbol.hpp>
 #include <fc/exception/exception.hpp>
 #include <fc/crypto/sha256.hpp>
@@ -216,6 +217,52 @@ class privileged_api : public context_aware_api {
          context.db.modify( a, [&]( auto& ma ){
             ma.privileged = is_priv;
          });
+      }
+
+      void update_blackwhitelist() {
+         auto params = fc::raw::unpack<updtbwlist_params>(context.act.data);
+
+         EOS_ASSERT(params.add.size() or params.rmv.size(), wasm_execution_error, "no item");
+
+         if (params.type == 5) {
+            auto get_action_list = [](const vector<string>& str_list) {
+               flat_set<pair<account_name, action_name>> result;
+               for (const auto& a: str_list) {
+                  auto pos = a.find( "::" );
+                  EOS_ASSERT(pos != std::string::npos, wasm_execution_error, "invalid entry in action-blacklist: '${a}'", ("a", a));
+                  account_name code(a.substr(0, pos));
+                  action_name act(a.substr(pos + 2));
+                  result.emplace(code.value, act.value);
+               }
+               return result;
+            };
+            context.control.update_onchain_action_blacklist(get_action_list(params.add), get_action_list(params.rmv));
+         } else if (params.type == 6) {
+            auto get_key_list = [](const vector<string>& str_list) {
+               flat_set<public_key_type> result;
+               for (const auto& a: str_list) result.emplace(a);
+               return result;
+            };
+            context.control.update_onchain_key_blacklist(get_key_list(params.add), get_key_list(params.rmv));
+         } else {
+            auto get_account_list = [](const vector<string>& str_list) {
+               flat_set<account_name> result;
+               for (const auto& a: str_list) result.emplace(a);
+               return result;
+            };
+            auto add = get_account_list(params.add);
+            auto rmv = get_account_list(params.rmv);
+
+            switch (params.type) {
+               case 0: { context.control.update_onchain_sender_bypass_whitelist(add, rmv); break; }
+               case 1: { context.control.update_onchain_actor_whitelist(add, rmv); break; }
+               case 2: { context.control.update_onchain_actor_blacklist(add, rmv); break; }
+               case 3: { context.control.update_onchain_contract_whitelist(add, rmv); break; }
+               case 4: { context.control.update_onchain_contract_blacklist(add, rmv); break; }
+               default:
+                  EOS_ASSERT(false, wasm_execution_error, "invalid type");
+            }
+         }
       }
 
 };
@@ -1864,6 +1911,7 @@ REGISTER_INTRINSICS(privileged_api,
    (get_resource_limits,              void(int64_t,int,int,int)             )
    (set_resource_limits,              void(int64_t,int64_t,int64_t,int64_t) )
    (set_proposed_producers,           int64_t(int,int)                      )
+   (update_blackwhitelist,            void()                         )
    (get_blockchain_parameters_packed, int(int, int)                         )
    (set_blockchain_parameters_packed, void(int,int)                         )
    (set_minimum_resource_security,    void(int64_t,int64_t,int64_t)         )

@@ -56,14 +56,16 @@ class whitelist_blacklist_tester {
          FC_ASSERT( !chain, "chain is already up" );
 
          auto cfg = get_default_chain_configuration( tempdir.path() );
-         cfg.sender_bypass_whiteblacklist = sender_bypass_whiteblacklist;
-         cfg.actor_whitelist = actor_whitelist;
-         cfg.actor_blacklist = actor_blacklist;
-         cfg.contract_whitelist = contract_whitelist;
-         cfg.contract_blacklist = contract_blacklist;
-         cfg.action_blacklist = action_blacklist;
+         cfg.offchain_sender_bypass_whiteblacklist = offchain_sender_bypass_whiteblacklist;
+         cfg.offchain_actor_whitelist = offchain_actor_whitelist;
+         cfg.offchain_actor_blacklist = offchain_actor_blacklist;
+         cfg.offchain_contract_whitelist = offchain_contract_whitelist;
+         cfg.offchain_contract_blacklist = offchain_contract_blacklist;
+         cfg.offchain_action_blacklist = offchain_action_blacklist;
+         cfg.offchain_key_blacklist = offchain_key_blacklist;
 
          chain.emplace(cfg);
+         chain->control->set_blackwhitelist();
          wdump((last_produced_block));
          chain->set_last_produced_block_map( last_produced_block );
 
@@ -102,12 +104,13 @@ class whitelist_blacklist_tester {
 
       fc::temp_directory                tempdir; // Must come before chain
       fc::optional<Tester>              chain;
-      flat_set<account_name>            sender_bypass_whiteblacklist;
-      flat_set<account_name>            actor_whitelist;
-      flat_set<account_name>            actor_blacklist;
-      flat_set<account_name>            contract_whitelist;
-      flat_set<account_name>            contract_blacklist;
-      flat_set< pair<account_name, action_name> >  action_blacklist;
+      flat_set<account_name>            offchain_sender_bypass_whiteblacklist;
+      flat_set<account_name>            offchain_actor_whitelist;
+      flat_set<account_name>            offchain_actor_blacklist;
+      flat_set<account_name>            offchain_contract_whitelist;
+      flat_set<account_name>            offchain_contract_blacklist;
+      flat_set< pair<account_name, action_name> >  offchain_action_blacklist;
+      flat_set<public_key_type> offchain_key_blacklist;
       map<account_name, block_id_type>  last_produced_block;
 };
 
@@ -123,9 +126,9 @@ FC_REFLECT( transfer_args, (from)(to)(quantity)(memo) )
 
 BOOST_AUTO_TEST_SUITE(whitelist_blacklist_tests)
 
-BOOST_AUTO_TEST_CASE( actor_whitelist ) { try {
+BOOST_AUTO_TEST_CASE( offchain_actor_whitelist ) { try {
    whitelist_blacklist_tester<> test;
-   test.actor_whitelist = {config::system_account_name, N(eosio.token), N(alice)};
+   test.offchain_actor_whitelist = {config::system_account_name, N(eosio.token), N(alice)};
    test.init();
 
    test.transfer( N(eosio.token), N(alice), "1000.00 TOK" );
@@ -156,9 +159,9 @@ BOOST_AUTO_TEST_CASE( actor_whitelist ) { try {
    test.chain->produce_blocks();
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( actor_blacklist ) { try {
+BOOST_AUTO_TEST_CASE( offchain_actor_blacklist ) { try {
    whitelist_blacklist_tester<> test;
-   test.actor_blacklist = {N(bob)};
+   test.offchain_actor_blacklist = {N(bob)};
    test.init();
 
    test.transfer( N(eosio.token), N(alice), "1000.00 TOK" );
@@ -190,9 +193,9 @@ BOOST_AUTO_TEST_CASE( actor_blacklist ) { try {
    test.chain->produce_blocks();
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( contract_whitelist ) { try {
+BOOST_AUTO_TEST_CASE( offchain_contract_whitelist ) { try {
    whitelist_blacklist_tester<> test;
-   test.contract_whitelist = {config::system_account_name, N(eosio.token), N(bob)};
+   test.offchain_contract_whitelist = {config::system_account_name, N(eosio.token), N(bob)};
    test.init();
 
    test.transfer( N(eosio.token), N(alice), "1000.00 TOK" );
@@ -239,9 +242,9 @@ BOOST_AUTO_TEST_CASE( contract_whitelist ) { try {
    test.chain->produce_blocks();
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( contract_blacklist ) { try {
+BOOST_AUTO_TEST_CASE( offchain_contract_blacklist ) { try {
    whitelist_blacklist_tester<> test;
-   test.contract_blacklist = {N(charlie)};
+   test.offchain_contract_blacklist = {N(charlie)};
    test.init();
 
    test.transfer( N(eosio.token), N(alice), "1000.00 TOK" );
@@ -288,10 +291,10 @@ BOOST_AUTO_TEST_CASE( contract_blacklist ) { try {
    test.chain->produce_blocks();
 } FC_LOG_AND_RETHROW() }
 
-BOOST_AUTO_TEST_CASE( action_blacklist ) { try {
+BOOST_AUTO_TEST_CASE( offchain_action_blacklist ) { try {
    whitelist_blacklist_tester<> test;
-   test.contract_whitelist = {config::system_account_name, N(eosio.token), N(bob), N(charlie)};
-   test.action_blacklist = {{N(charlie), N(create)}};
+   test.offchain_contract_whitelist = {config::system_account_name, N(eosio.token), N(bob), N(charlie)};
+   test.offchain_action_blacklist = {{N(charlie), N(create)}};
    test.init();
 
    test.transfer( N(eosio.token), N(alice), "1000.00 TOK" );
@@ -334,7 +337,7 @@ BOOST_AUTO_TEST_CASE( blacklist_eosio ) { try {
    tester1.chain->set_code(config::system_account_name, eosio_token_wast);
    tester1.chain->produce_blocks();
    tester1.shutdown();
-   tester1.contract_blacklist = {config::system_account_name};
+   tester1.offchain_contract_blacklist = {config::system_account_name};
    tester1.init(false);
 
    whitelist_blacklist_tester<tester> tester2;
@@ -374,7 +377,7 @@ BOOST_AUTO_TEST_CASE( deferred_blacklist_failure ) { try {
 
    tester1.shutdown();
 
-   tester1.contract_blacklist = {N(charlie)};
+   tester1.offchain_contract_blacklist = {N(charlie)};
    tester1.init(false);
 
    whitelist_blacklist_tester<tester> tester2;
@@ -424,7 +427,7 @@ BOOST_AUTO_TEST_CASE( blacklist_onerror ) { try {
    tester1.chain->produce_blocks();
    tester1.shutdown();
 
-   tester1.action_blacklist = {{config::system_account_name, N(onerror)}};
+   tester1.offchain_action_blacklist = {{config::system_account_name, N(onerror)}};
    tester1.init(false);
 
    tester1.chain->push_action( N(bob), N(defercall), N(alice), mvo()
@@ -487,7 +490,7 @@ BOOST_AUTO_TEST_CASE( actor_blacklist_inline_deferred ) { try {
 
    tester1.shutdown();
 
-   tester1.actor_blacklist = {N(bob)};
+   tester1.offchain_actor_blacklist = {N(bob)};
    tester1.init(false);
 
    whitelist_blacklist_tester<tester> tester2;
@@ -555,7 +558,7 @@ BOOST_AUTO_TEST_CASE( actor_blacklist_inline_deferred ) { try {
 
    tester1.shutdown();
 
-   tester1.actor_blacklist = {N(bob), N(charlie)};
+   tester1.offchain_actor_blacklist = {N(bob), N(charlie)};
    tester1.init(false);
 
    auto c2 = tester1.chain->control->applied_transaction.connect( log_trxs );
@@ -629,8 +632,8 @@ BOOST_AUTO_TEST_CASE( blacklist_sender_bypass ) { try {
 
    tester1.shutdown();
 
-   tester1.sender_bypass_whiteblacklist = {N(charlie)};
-   tester1.actor_blacklist = {N(bob), N(charlie)};
+   tester1.offchain_sender_bypass_whiteblacklist = {N(charlie)};
+   tester1.offchain_actor_blacklist = {N(bob), N(charlie)};
    tester1.init(false);
 
    BOOST_CHECK_EXCEPTION( tester1.chain->push_action( N(bob), N(deferfunc), N(bob), mvo()
@@ -696,9 +699,9 @@ BOOST_AUTO_TEST_CASE( blacklist_sender_bypass ) { try {
 
    tester1.shutdown();
 
-   tester1.sender_bypass_whiteblacklist = {N(charlie)};
-   tester1.actor_blacklist = {N(bob), N(charlie)};
-   tester1.contract_blacklist = {N(bob)}; // Add bob to the contract blacklist as well
+   tester1.offchain_sender_bypass_whiteblacklist = {N(charlie)};
+   tester1.offchain_actor_blacklist = {N(bob), N(charlie)};
+   tester1.offchain_contract_blacklist = {N(bob)}; // Add bob to the contract blacklist as well
    tester1.init(false);
 
    num_deferred = tester1.chain->control->db().get_index<generated_transaction_multi_index,by_trx_id>().size();
@@ -734,5 +737,192 @@ BOOST_AUTO_TEST_CASE( blacklist_sender_bypass ) { try {
    }
 
 } FC_LOG_AND_RETHROW() }
+
+template <typename T>
+auto merge_set(const flat_set<T> l, const flat_set<T> r) {
+   flat_set<T> ret(l.begin(), l.end());
+   for (auto & o : r)
+      ret.insert(o);
+   return ret;
+}
+
+BOOST_AUTO_TEST_CASE( local_and_onchain_blacklist ) { try {
+   whitelist_blacklist_tester<> test;
+//   test.offchain_sender_bypass_whiteblacklist
+   flat_set<account_name> acct_set[3] = {{},
+                                         {N(eosio), N(eosio.token), N(alice1), N(alice2),  N(alice3)},
+                                         {N(alice1),N(alice4), N(alice5), N(alices)}};
+   flat_set< pair<account_name, action_name> > acct_act_set[3] = {{},
+                                                                {{N(code), N(act1)}, {N(code), N(act2)}, {N(code), N(act3)}},
+                                                                {{N(code), N(act4)}, {N(code), N(act5)}}
+   };
+   flat_set<public_key_type> pub_set[3] = {{},
+                                  {public_key_type(
+                                          string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi")), public_key_type(
+                                          string("EOS88HsUadjQdvRTjvkCR367i1KLbts1SuH1YNS2CEBUga1VLjzzj")), public_key_type(
+                                          string("EOS7c3zLNzBSziBjT3VAZPszz7u58ax42J3r4aKm4sHA75BwmNrto"))},
+                                  {public_key_type(
+                                          string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi")),public_key_type(
+                                          string("EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV")), public_key_type(
+                                          string("EOS7uG1PmJVHvYbxAsDQsbKRQAd5QNSRrH7nkJVYvZ84XjfQoYVb9")), public_key_type(
+                                          string("EOS7By98EfcCMAKLZFPYY7gxPE4sZiCLo6uJDaet8sZCrXL54Yng2"))}
+   };
+   flat_set<string> key_set[3] = {
+           {},
+           {string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi"),
+                   string("EOS88HsUadjQdvRTjvkCR367i1KLbts1SuH1YNS2CEBUga1VLjzzj"),
+                   string("EOS7c3zLNzBSziBjT3VAZPszz7u58ax42J3r4aKm4sHA75BwmNrto")
+           },
+           {string("EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi"),
+            string("EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV"),
+                   string("EOS7uG1PmJVHvYbxAsDQsbKRQAd5QNSRrH7nkJVYvZ84XjfQoYVb9"),
+                   string("EOS7By98EfcCMAKLZFPYY7gxPE4sZiCLo6uJDaet8sZCrXL54Yng2")}
+   };
+   auto keylist_to_string = [](const flat_set<public_key_type> & input){
+       flat_set<string> get_key_set;
+       for(auto& o : input) {
+          get_key_set.insert(string(o));
+       }
+       return get_key_set;
+   };
+
+
+   test.offchain_actor_whitelist = test.offchain_contract_whitelist = test.offchain_actor_blacklist = test.offchain_contract_blacklist = acct_set[1];
+   test.offchain_action_blacklist = acct_act_set[1];
+   test.offchain_key_blacklist = pub_set[1];
+   test.init();
+
+   BOOST_TEST(test.chain->control->get_actor_whitelist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_actor_blacklist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_contract_whitelist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_contract_blacklist() == acct_set[1]);
+   BOOST_TEST(test.chain->control->get_action_blacklist() == acct_act_set[1]);
+   BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == key_set[1]);
+
+   // offchain
+   for (int i = 2; i >= 0; i--) {
+
+      test.chain->control->set_offchain_actor_whitelist(acct_set[i]);
+      test.chain->control->set_offchain_actor_blacklist(acct_set[i]);
+      test.chain->control->set_offchain_contract_whitelist(acct_set[i]);
+      test.chain->control->set_offchain_contract_blacklist(acct_set[i]);
+      test.chain->control->set_offchain_action_blacklist(acct_act_set[i]);
+      test.chain->control->set_offchain_key_blacklist(pub_set[i]);
+
+//    BOOST_TEST_MESSAGE("local or onchain: " << bLocal <<  " testgroup " << i << " blacklist size: " << acct_set[i].size());
+      BOOST_TEST(test.chain->control->get_actor_whitelist() == acct_set[i]);
+      BOOST_TEST(test.chain->control->get_actor_blacklist() == acct_set[i]);
+      BOOST_TEST(test.chain->control->get_contract_whitelist() == acct_set[i]);
+      BOOST_TEST(test.chain->control->get_contract_blacklist() == acct_set[i]);
+      BOOST_TEST(test.chain->control->get_action_blacklist() == acct_act_set[i]);
+      BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == key_set[i]);
+   }
+
+    // onchain
+    for (int i = 2; i >= 0; i--) {
+
+       test.chain->control->update_onchain_actor_whitelist(acct_set[i], acct_set[0]);
+       test.chain->control->update_onchain_actor_blacklist(acct_set[i], acct_set[0]);
+       test.chain->control->update_onchain_contract_whitelist(acct_set[i], acct_set[0]);
+       test.chain->control->update_onchain_contract_blacklist(acct_set[i], acct_set[0]);
+       test.chain->control->update_onchain_action_blacklist(acct_act_set[i], acct_act_set[0]);
+       test.chain->control->update_onchain_key_blacklist(pub_set[i], pub_set[0]);
+
+   //    BOOST_TEST_MESSAGE("local or onchain: " << bLocal <<  " testgroup " << i << " blacklist size: " << acct_set[i].size());
+       BOOST_TEST(test.chain->control->get_actor_whitelist() == acct_set[i]);
+       BOOST_TEST(test.chain->control->get_actor_blacklist() == acct_set[i]);
+       BOOST_TEST(test.chain->control->get_contract_whitelist() == acct_set[i]);
+       BOOST_TEST(test.chain->control->get_contract_blacklist() == acct_set[i]);
+       BOOST_TEST(test.chain->control->get_action_blacklist() == acct_act_set[i]);
+       BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == key_set[i]);
+
+       //clear
+       test.chain->control->update_onchain_actor_whitelist(acct_set[0], acct_set[i]);
+       test.chain->control->update_onchain_actor_blacklist(acct_set[0], acct_set[i]);
+       test.chain->control->update_onchain_contract_whitelist(acct_set[0], acct_set[i]);
+       test.chain->control->update_onchain_contract_blacklist(acct_set[0], acct_set[i]);
+       test.chain->control->update_onchain_action_blacklist(acct_act_set[0], acct_act_set[i]);
+       test.chain->control->update_onchain_key_blacklist(pub_set[0] ,pub_set[i]);
+
+       BOOST_TEST(test.chain->control->get_actor_whitelist() == acct_set[0]);
+       BOOST_TEST(test.chain->control->get_actor_blacklist() == acct_set[0]);
+       BOOST_TEST(test.chain->control->get_contract_whitelist() == acct_set[0]);
+       BOOST_TEST(test.chain->control->get_contract_blacklist() == acct_set[0]);
+       BOOST_TEST(test.chain->control->get_action_blacklist() == acct_act_set[0]);
+       BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == key_set[0]);
+    }
+
+    // local and onchain
+    for (int i = 2; i >= 0; i--) {
+       int j = (i+1)%3;
+
+       test.chain->control->set_offchain_actor_whitelist(acct_set[i]);
+       test.chain->control->set_offchain_actor_blacklist(acct_set[i]);
+       test.chain->control->set_offchain_contract_whitelist(acct_set[i]);
+       test.chain->control->set_offchain_contract_blacklist(acct_set[i]);
+       test.chain->control->set_offchain_action_blacklist(acct_act_set[i]);
+       test.chain->control->set_offchain_key_blacklist(pub_set[i]);
+
+       test.chain->control->update_onchain_actor_whitelist(acct_set[j], acct_set[0]);
+       test.chain->control->update_onchain_actor_blacklist(acct_set[j], acct_set[0]);
+       test.chain->control->update_onchain_contract_whitelist(acct_set[j], acct_set[0]);
+       test.chain->control->update_onchain_contract_blacklist(acct_set[j], acct_set[0]);
+       test.chain->control->update_onchain_action_blacklist(acct_act_set[j], acct_act_set[0]);
+       test.chain->control->update_onchain_key_blacklist(pub_set[j], pub_set[0]);
+
+       BOOST_TEST_MESSAGE("local and onchain " <<   " testgroup " << i << " blacklist size: " << merge_set(acct_set[i] , acct_set[j]).size());
+       BOOST_TEST(test.chain->control->get_actor_whitelist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_actor_blacklist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_contract_whitelist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_contract_blacklist() == merge_set(acct_set[i] , acct_set[j]));
+       BOOST_TEST(test.chain->control->get_action_blacklist() == merge_set(acct_act_set[i] , acct_act_set[j]));
+       BOOST_TEST(keylist_to_string(test.chain->control->get_key_blacklist()) == merge_set(key_set[i] , key_set[j]));
+
+       //clear
+       test.chain->control->update_onchain_actor_whitelist(acct_set[0], acct_set[j]);
+       test.chain->control->update_onchain_actor_blacklist(acct_set[0], acct_set[j]);
+       test.chain->control->update_onchain_contract_whitelist(acct_set[0], acct_set[j]);
+       test.chain->control->update_onchain_contract_blacklist(acct_set[0], acct_set[j]);
+       test.chain->control->update_onchain_action_blacklist(acct_act_set[0], acct_act_set[j]);
+       test.chain->control->update_onchain_key_blacklist(pub_set[0] ,pub_set[j]);
+    }
+/*
+
+curl http://127.0.0.1:8000/v1/producer/get_whitelist_blacklist
+
+curl -H "Content-type: application/json" -X POST -d '{"actor_whitelist":["eosio","actwhite1","actwhite4","actwhite5"]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"actor_blacklist":["actblack1","actblack4","actblack5"]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"contract_whitelist":["eosio","codewhite1","codewhite4","codewhite5"]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"contract_blacklist":["codeblack1","codeblack4","codeblack5"]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"key_blacklist":["EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi","EOS88HsUadjQdvRTjvkCR367i1KLbts1SuH1YNS2CEBUga1VLjzzj","EOS7c3zLNzBSziBjT3VAZPszz7u58ax42J3r4aKm4sHA75BwmNrto"]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+
+curl -H "Content-type: application/json" -X POST -d '{"actor_whitelist":[]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"actor_blacklist":[]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"contract_whitelist":[]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"contract_blacklist":[]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+curl -H "Content-type: application/json" -X POST -d '{"key_blacklist":[]}'  -v  http://127.0.0.1:8000/v1/producer/set_whitelist_blacklist
+
+
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":0, "add":["bypass","bypass1","bypass2","bypass3"], "rmv":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":1, "add":["eosio","actwhite1","actwhite2","actwhite3"], "rmv":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":2, "add":["actblack1","actblack2","actblacks"], "rmv":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":3, "add":["eosio", "codewhite1","codewhite2","codewhite3"], "rmv":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":4, "add":["codeblack1","codeblack2","codeblack3"], "rmv":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":5, "add":["eosio.token::create","eosio.token::issue","eosio.token::transfer"], "rmv":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":6, "add":["EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi","EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV"], "rmv":[]}' -p eosio
+
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":0, "rmv":["bypass","bypass1","bypass2","bypass3"], "add":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":1, "rmv":["eosio","actwhite1","actwhite2","actwhite3"], "add":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":2, "rmv":["actblack1","actblack2","actblacks"], "add":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":3, "rmv":["eosio", "codewhite1","codewhite2","codewhite3"], "add":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":4, "rmv":["codeblack1","codeblack2","codeblack3"], "add":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":5, "rmv":["eosio.token::create","eosio.token::issue","eosio.token::transfer"], "add":[]}' -p eosio
+../../build/programs/cleos/cleos --wallet-url http://127.0.0.1:6666 --url http://127.0.0.1:8000 push action eosio updtbwlist  '{"type":6, "rmv":["EOS6QSCXbMbbSV6xMWe9ZcihER41ium4YKupo5MC5uyE3cDz8P2xi","EOS8FBjLtWWHjccQWMUGhyawWwtfhKqznCyyNbbpcimaRN4TpPFaV"], "add":[]}' -p eosio
+
+*/
+
+} FC_LOG_AND_RETHROW() }
+
+
 
 BOOST_AUTO_TEST_SUITE_END()
