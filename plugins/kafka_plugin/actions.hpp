@@ -111,7 +111,7 @@ struct delegatebw {
    name receiver;
    asset stake_net_quantity;
    asset stake_cpu_quantity;
-   bool transfer;
+   uint8_t transfer;
 };
 
 struct undelegatebw {
@@ -129,7 +129,7 @@ struct voteproducer {
 
 struct regproxy {
    name proxy;
-   bool isproxy;
+   uint8_t isproxy;
 };
 
 struct regproducer {

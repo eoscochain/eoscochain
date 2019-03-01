@@ -309,183 +309,188 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     bool has_ram_deal = false;
     bool has_claimed_rewards = false;
 
-    // get any extra data
-    if (a->account == a->receiver) { // only once
-        const auto& data = action_trace.act.data;
+    try {
+        // get any extra data
+        if (a->account == a->receiver) { // only once
+            const auto& data = action_trace.act.data;
 
-        if (a->account == N(eosio)) {
-            switch (a->name) {
-                case N(newaccount): {
+            if (a->account == N(eosio)) {
+                switch (a->name) {
+                    case N(newaccount): {
+                        auto& db = get_db();
+                        const auto& s = db.get<stats_object>();
+                        db.modify(s, [&](stats_object &s) {
+                            s.account_count += 1;
+                        });
+                        break;
+                    }
+                    case N(setabi): {
+                        const auto setabi = action_trace.act.data_as<chain::setabi>();
+                        auto& chain = app().find_plugin<chain_plugin>()->chain();
+                        const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setabi.account);
+                        a->extra = fc::json::to_string(account_sequence.abi_sequence, fc::json::legacy_generator);
+                        break;
+                    }
+                    case N(setcode): {
+                        const auto setcode = action_trace.act.data_as<chain::setcode>();
+                        auto& chain = app().find_plugin<chain_plugin>()->chain();
+                        const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setcode.account);
+                        a->extra = fc::json::to_string(account_sequence.code_sequence, fc::json::legacy_generator);
+                        break;
+                    }
+                    case N(canceldelay): {
+                        const auto canceldelay = action_trace.act.data_as<chain::canceldelay>();
+                        a->extra = fc::json::to_string(canceldelay.trx_id, fc::json::legacy_generator);
+                    }
+                    case N(buyrambytes): {
+                        const auto brb = fc::raw::unpack<buyrambytes>(data);
+                        cached_ram_deals_[a->global_seq] = ram_deal{
+                            .global_seq = a->global_seq,
+                            .bytes = brb.bytes,
+                            .quantity = asset()
+                        };
+                        has_ram_deal = true;
+                        break;
+                    }
+                    case N(buyram): {
+                        const auto br = fc::raw::unpack<buyram>(data);
+                        auto ram_price = get_ram_price();
+                        auto r = ram_deal{
+                           .global_seq = a->global_seq,
+                           .bytes = static_cast<int64_t>(static_cast<double>(br.tokens.get_amount()) / ram_price.get_amount() * 1024), // estimation
+                           .quantity = br.tokens
+                        };
+                        a->extra = fc::json::to_string(r, fc::json::legacy_generator);
+                        break;
+                    }
+                    case N(sellram): {
+                        const auto sr = fc::raw::unpack<sellram>(data);
+                        cached_ram_deals_[a->global_seq] = ram_deal{
+                           .global_seq = a->global_seq,
+                           .bytes = -sr.bytes,
+                           .quantity = asset()
+                        };
+                        has_ram_deal = true;
+                        break;
+                    }
+                    case N(delegatebw): {
+                        const auto db = fc::raw::unpack<delegatebw>(data);
+                        const auto& from = db.transfer ? db.receiver : db.from;
+                        vector<voter> result;
+                        get_voters(from, result);
+                        a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                        // ilog("delegatebw: ${extra}", ("extra", a->extra));
+                        break;
+                    }
+                    case N(undelegatebw): {
+                        const auto ub = fc::raw::unpack<undelegatebw>(data);
+                        vector<voter> result;
+                        get_voters(ub.from, result);
+                        a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                        // ilog("undelegatebw: ${extra}", ("extra", a->extra));
+                        break;
+                    }
+                    case N(voteproducer): {
+                        const auto vp = fc::raw::unpack<voteproducer>(data);
+                        vector<voter> result;
+                        get_voters(vp.voter, result);
+                        a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                        // ilog("voteproducer: ${extra}", ("extra", a->extra));
+                        break;
+                    }
+                    case N(regproxy): {
+                        const auto rp = fc::raw::unpack<regproxy>(data);
+                        vector<voter> result;
+                        get_voters(rp.proxy, result);
+                        a->extra = fc::json::to_string(result, fc::json::legacy_generator);
+                        // ilog("regproxy: ${extra}", ("extra", a->extra));
+                        break;
+                    }
+                    case N(regproducer): {
+                        const auto rp = fc::raw::unpack<regproducer>(data);
+
+                        auto& db = get_db();
+                        auto p = db.find<producer_stats_object, by_producer>(rp.producer);
+                        if (not p) {
+                            db.create<producer_stats_object>([&](auto &p) {
+                               p.producer = rp.producer;
+                               p.produced_blocks = 0;
+                               p.unpaid_blocks = 0;
+                               p.claimed_rewards = asset();
+                            });
+                        }
+
+                        break;
+                    }
+                    case N(unregprod): {
+                        // const auto up = fc::raw::unpack<unregprod>(data);
+                        break;
+                    }
+                    case N(rmvproducer): {
+                        // const auto rp = fc::raw::unpack<rmvproducer>(data);
+                        break;
+                    }
+                    case N(claimrewards): {
+                        const auto cr = fc::raw::unpack<claimrewards>(data);
+                        cached_claimed_rewards_[a->global_seq] = claimed_rewards{
+                            .owner = cr.owner,
+                            .quantity = asset()
+                        };
+                        has_claimed_rewards = true;
+                        break;
+                    }
+                }
+            } else if (a->name == N(create) and is_token(a->account)) {
+                try {
+                    const auto create_data = fc::raw::unpack<create>(data);
+                    a->extra = fc::json::to_string(create_data, fc::json::legacy_generator);
+
                     auto& db = get_db();
                     const auto& s = db.get<stats_object>();
                     db.modify(s, [&](stats_object &s) {
-                        s.account_count += 1;
+                       s.token_count += 1;
                     });
-                    break;
+                } catch (...) {
+                    // ignore any error of unpack
                 }
-                case N(setabi): {
-                    const auto setabi = action_trace.act.data_as<chain::setabi>();
-                    auto& chain = app().find_plugin<chain_plugin>()->chain();
-                    const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setabi.account);
-                    a->extra = fc::json::to_string(account_sequence.abi_sequence, fc::json::legacy_generator);
-                    break;
+            } else if (a->name == N(issue) and is_token(a->account)) {
+                try {
+                    const auto issue_data = fc::raw::unpack<issue>(data);
+                    a->extra = fc::json::to_string(issue_data, fc::json::legacy_generator);
+                } catch (...) {
+                    // ignore any error of unpack
                 }
-                case N(setcode): {
-                    const auto setcode = action_trace.act.data_as<chain::setcode>();
-                    auto& chain = app().find_plugin<chain_plugin>()->chain();
-                    const auto &account_sequence = chain.db().get<chain::account_sequence_object, chain::by_name>(setcode.account);
-                    a->extra = fc::json::to_string(account_sequence.code_sequence, fc::json::legacy_generator);
-                    break;
-                }
-                case N(canceldelay): {
-                    const auto canceldelay = action_trace.act.data_as<chain::canceldelay>();
-                    a->extra = fc::json::to_string(canceldelay.trx_id, fc::json::legacy_generator);
-                }
-                case N(buyrambytes): {
-                    const auto brb = fc::raw::unpack<buyrambytes>(data);
-                    cached_ram_deals_[a->global_seq] = ram_deal{
-                        .global_seq = a->global_seq,
-                        .bytes = brb.bytes,
-                        .quantity = asset()
-                    };
-                    has_ram_deal = true;
-                    break;
-                }
-                case N(buyram): {
-                    const auto br = fc::raw::unpack<buyram>(data);
-                    auto ram_price = get_ram_price();
-                    auto r = ram_deal{
-                       .global_seq = a->global_seq,
-                       .bytes = static_cast<int64_t>(static_cast<double>(br.tokens.get_amount()) / ram_price.get_amount() * 1024), // estimation
-                       .quantity = br.tokens
-                    };
-                    a->extra = fc::json::to_string(r, fc::json::legacy_generator);
-                    break;
-                }
-                case N(sellram): {
-                    const auto sr = fc::raw::unpack<sellram>(data);
-                    cached_ram_deals_[a->global_seq] = ram_deal{
-                       .global_seq = a->global_seq,
-                       .bytes = -sr.bytes,
-                       .quantity = asset()
-                    };
-                    has_ram_deal = true;
-                    break;
-                }
-                case N(delegatebw): {
-                    const auto db = fc::raw::unpack<delegatebw>(data);
-                    const auto& from = db.transfer ? db.receiver : db.from;
-                    vector<voter> result;
-                    get_voters(from, result);
-                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
-                    // ilog("delegatebw: ${extra}", ("extra", a->extra));
-                    break;
-                }
-                case N(undelegatebw): {
-                    const auto ub = fc::raw::unpack<undelegatebw>(data);
-                    vector<voter> result;
-                    get_voters(ub.from, result);
-                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
-                    // ilog("undelegatebw: ${extra}", ("extra", a->extra));
-                    break;
-                }
-                case N(voteproducer): {
-                    const auto vp = fc::raw::unpack<voteproducer>(data);
-                    vector<voter> result;
-                    get_voters(vp.voter, result);
-                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
-                    // ilog("voteproducer: ${extra}", ("extra", a->extra));
-                    break;
-                }
-                case N(regproxy): {
-                    const auto rp = fc::raw::unpack<regproxy>(data);
-                    vector<voter> result;
-                    get_voters(rp.proxy, result);
-                    a->extra = fc::json::to_string(result, fc::json::legacy_generator);
-                    // ilog("regproxy: ${extra}", ("extra", a->extra));
-                    break;
-                }
-                case N(regproducer): {
-                    const auto rp = fc::raw::unpack<regproducer>(data);
+            } else if (a->name == N(transfer) and is_token(a->account)) {
+                try {
+                    const auto transfer_data = fc::raw::unpack<transfer>(data);
+                    // TODO: get table row
+                    a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
 
-                    auto& db = get_db();
-                    auto p = db.find<producer_stats_object, by_producer>(rp.producer);
-                    if (not p) {
-                        db.create<producer_stats_object>([&](auto &p) {
-                           p.producer = rp.producer;
-                           p.produced_blocks = 0;
-                           p.unpaid_blocks = 0;
-                           p.claimed_rewards = asset();
-                        });
-                    }
-
-                    break;
-                }
-                case N(unregprod): {
-                    // const auto up = fc::raw::unpack<unregprod>(data);
-                    break;
-                }
-                case N(rmvproducer): {
-                    // const auto rp = fc::raw::unpack<rmvproducer>(data);
-                    break;
-                }
-                case N(claimrewards): {
-                    const auto cr = fc::raw::unpack<claimrewards>(data);
-                    cached_claimed_rewards_[a->global_seq] = claimed_rewards{
-                        .owner = cr.owner,
-                        .quantity = asset()
-                    };
-                    has_claimed_rewards = true;
-                    break;
-                }
-            }
-        } else if (a->name == N(create) and is_token(a->account)) {
-            try {
-                const auto create_data = fc::raw::unpack<create>(data);
-                a->extra = fc::json::to_string(create_data, fc::json::legacy_generator);
-
-                auto& db = get_db();
-                const auto& s = db.get<stats_object>();
-                db.modify(s, [&](stats_object &s) {
-                   s.token_count += 1;
-                });
-            } catch (...) {
-                // ignore any error of unpack
-            }
-        } else if (a->name == N(issue) and is_token(a->account)) {
-            try {
-                const auto issue_data = fc::raw::unpack<issue>(data);
-                a->extra = fc::json::to_string(issue_data, fc::json::legacy_generator);
-            } catch (...) {
-                // ignore any error of unpack
-            }
-        } else if (a->name == N(transfer) and is_token(a->account)) {
-            try {
-                const auto transfer_data = fc::raw::unpack<transfer>(data);
-                // TODO: get table row
-                a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
-
-                if (a->account == N(eosio.token)) {
-                    if (transfer_data.from == N(eosio.ram) or transfer_data.from == N(eosio.ramfee)) { // buy
-                       auto it = cached_ram_deals_.find(a->parent_seq);
-                       if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
-                    } else if (transfer_data.to == N(eosio.ram)) { // sell
-                        auto it = cached_ram_deals_.find(a->parent_seq);
-                        if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
-                    } else if (transfer_data.to == N(eosio.ramfee)) { // sell
-                        auto it = cached_ram_deals_.find(a->parent_seq);
-                        if (it != cached_ram_deals_.end()) it->second.quantity -= transfer_data.quantity;
-                    } else if (transfer_data.from == N(eosio.bpay) or transfer_data.from == N(eosio.vpay)) { // producer block/vote pay
-                        auto it = cached_claimed_rewards_.find(a->parent_seq);
-                        if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
-                            it->second.quantity += transfer_data.quantity;
+                    if (a->account == N(eosio.token)) {
+                        if (transfer_data.from == N(eosio.ram) or transfer_data.from == N(eosio.ramfee)) { // buy
+                           auto it = cached_ram_deals_.find(a->parent_seq);
+                           if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
+                        } else if (transfer_data.to == N(eosio.ram)) { // sell
+                            auto it = cached_ram_deals_.find(a->parent_seq);
+                            if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
+                        } else if (transfer_data.to == N(eosio.ramfee)) { // sell
+                            auto it = cached_ram_deals_.find(a->parent_seq);
+                            if (it != cached_ram_deals_.end()) it->second.quantity -= transfer_data.quantity;
+                        } else if (transfer_data.from == N(eosio.bpay) or transfer_data.from == N(eosio.vpay)) { // producer block/vote pay
+                            auto it = cached_claimed_rewards_.find(a->parent_seq);
+                            if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
+                                it->second.quantity += transfer_data.quantity;
+                            }
                         }
                     }
+                } catch (...) {
+                    // ignore any error of unpack
                 }
-            } catch (...) {
-                // ignore any error of unpack
             }
         }
+    } catch (fc::exception& e) {
+        elog("filter action data failed, error: ${e}, action trace: ${a}", ("e", e.to_string())("a", action_trace));
+        throw;
     }
 
     cached_actions_[action_trace.trx_id].push_back(a);
@@ -540,7 +545,8 @@ bool kafka::is_token(name account) {
     auto plugin = app().find_plugin<chain_plugin>();
     auto& chain = plugin->chain();
     auto abi_serializer = chain.get_abi_serializer(account, plugin->get_abi_serializer_max_time());
-    EOS_ASSERT(bool(abi_serializer), chain::abi_exception, "invalid abi for account ${account}", ("account", account));
+    auto account_object = chain.get_account(account);
+    if (not abi_serializer) return false; // account with no abi can also be called as contract
 
     auto stat_name = abi_serializer->get_table_type(N(stat));
     if (stat_name.empty()) return false;
