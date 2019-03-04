@@ -105,6 +105,8 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
 
     unsigned start_block_num = options.at("kafka-start-block-num").as<unsigned>();
+    unsigned reversible_start_block_num = 0;
+    if (start_block_num > 340) reversible_start_block_num = start_block_num - 340; // TODO: configure 340 as option
 
     // add callback to chain_controller config
     chain_plugin_ = app().find_plugin<chain_plugin>();
@@ -129,21 +131,15 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
 
     block_conn_ = chain.accepted_block.connect([=](const chain::block_state_ptr& b) {
-        if (not start_sync_) {
-            if (b->block_num >= start_block_num) start_sync_ = true;
-            else return;
-        }
+        if (b->block_num < reversible_start_block_num) return;
         handle([=] { kafka_->push_block(b, false); }, "push block");
     });
     irreversible_block_conn_ = chain.irreversible_block.connect([=](const chain::block_state_ptr& b) {
-        if (not start_sync_) {
-            if (b->block_num >= start_block_num) start_sync_ = true;
-            else return;
-        }
+        if (b->block_num < start_block_num) return;
         handle([=] { kafka_->push_block(b, true); }, "push irreversible block");
     });
     transaction_conn_ = chain.applied_transaction.connect([=](const chain::transaction_trace_ptr& t) {
-        if (not start_sync_) return;
+        if (t->block_num < reversible_start_block_num) return;
         handle([=] { kafka_->push_transaction_trace(t); }, "push transaction");
     });
 

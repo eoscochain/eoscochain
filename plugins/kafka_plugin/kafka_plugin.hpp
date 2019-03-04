@@ -31,8 +31,6 @@ private:
     boost::signals2::connection irreversible_block_conn_;
     boost::signals2::connection transaction_conn_;
 
-    std::atomic<bool> start_sync_{false};
-
     std::unique_ptr<class kafka::kafka> kafka_;
 };
 
