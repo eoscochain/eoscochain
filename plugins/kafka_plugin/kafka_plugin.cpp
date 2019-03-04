@@ -62,7 +62,6 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
 
     ilog("Initialize kafka plugin");
-    configured_ = true;
 
     string compressionCodec = "snappy";
     if (options.count("kafka-compression-codec")) {
@@ -147,17 +146,17 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
         if (not start_sync_) return;
         handle([=] { kafka_->push_transaction_trace(t); }, "push transaction");
     });
+
+    kafka_->start();
+
+    ilog("Initialized kafka plugin");
 }
 
 void kafka_plugin::plugin_startup() {
-    if (not configured_) return;
-    ilog("Starting kafka_plugin");
-    kafka_->start();
     ilog("Started kafka_plugin");
 }
 
 void kafka_plugin::plugin_shutdown() {
-    if (not configured_) return;
     ilog("Stopping kafka_plugin");
 
     try {
