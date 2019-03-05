@@ -11,7 +11,6 @@
 #include <eosio/chain/wasm_eosio_validation.hpp>
 #include <eosio/chain/wasm_eosio_injection.hpp>
 #include <eosio/chain/global_property_object.hpp>
-#include <eosio/chain/core_symbol_object.hpp>
 #include <eosio/chain/account_object.hpp>
 #include <eosio/chain/blackwhitelist_object.hpp>
 #include <eosio/chain/symbol.hpp>
@@ -1032,28 +1031,6 @@ class action_api : public context_aware_api {
       }
 };
 
-class core_symbol_api : public context_aware_api {
-   public:
-      core_symbol_api( apply_context& ctx )
-      : context_aware_api(ctx,true) {}
-
-      uint64_t core_symbol() {
-         return ::eosio::chain::core_symbol();
-      }
-
-      void set_core_symbol(array_ptr<const char> str, size_t str_len) {
-         auto s = ::eosio::chain::core_symbol(string(str, str_len));
-
-         auto& original = context.control.get_core_symbol();
-         EOS_ASSERT(s != original.core_symbol, symbol_type_exception, "core symbol not changed");
-
-         context.db.modify( original,
-            [&]( auto& cs ) {
-                 cs.core_symbol = s;
-         });
-      }   
-};
-
 class console_api : public context_aware_api {
    public:
       console_api( apply_context& ctx )
@@ -2006,12 +1983,6 @@ REGISTER_INTRINSICS(authorization_api,
    (require_authorization, void(int64_t, int64_t), "require_auth2", void(authorization_api::*)(const account_name&, const permission_name& permission) )
    (has_authorization,     int(int64_t), "has_auth", bool(authorization_api::*)(const account_name&)const )
    (is_account,            int(int64_t)           )
-);
-
-
-REGISTER_INTRINSICS(core_symbol_api,
-   (core_symbol, int64_t())
-   (set_core_symbol, void(int, int))
 );
 
 REGISTER_INTRINSICS(console_api,

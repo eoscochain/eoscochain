@@ -1412,10 +1412,13 @@ vector<fc::variant> read_only::get_producers_by_names ( const get_producers_by_n
    vector<fc::variant> result;
    result.reserve(params.producers.size());
 
-   get_table_rows_params p{
-      .json = params.json, .code = config::system_account_name, .scope = name(config::system_account_name).to_string(), .table = N(producers),
-      .limit = 1, .key_type = "name"
-   };
+   get_table_rows_params p;
+   p.json = params.json;
+   p.code = config::system_account_name;
+   p.scope = name(config::system_account_name).to_string();
+   p.table = N(producers);
+   p.limit = 1;
+   p.key_type = "name";
 
    for (const auto& producer: params.producers) {
       p.lower_bound = producer;

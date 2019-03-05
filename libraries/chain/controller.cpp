@@ -11,7 +11,6 @@
 #include <eosio/chain/block_summary_object.hpp>
 #include <eosio/chain/eosio_contract.hpp>
 #include <eosio/chain/global_property_object.hpp>
-#include <eosio/chain/core_symbol_object.hpp>
 #include <eosio/chain/contract_table_objects.hpp>
 #include <eosio/chain/generated_transaction_object.hpp>
 #include <eosio/chain/transaction_object.hpp>
@@ -38,7 +37,6 @@ using controller_index_set = index_set<
    account_sequence_index,
    global_property_multi_index,
    dynamic_global_property_multi_index,
-   core_symbol_multi_index,
    block_summary_multi_index,
    transaction_multi_index,
    generated_transaction_multi_index,
@@ -657,10 +655,6 @@ struct controller_impl {
         gpo.configuration = conf.genesis.initial_configuration;
       });
       db.create<dynamic_global_property_object>([](auto&){});
-
-      db.create<core_symbol_object>([](auto& cs){
-         cs.core_symbol = core_symbol();
-      });
 
       db.create<blackwhitelist_object>([](auto&){});
 
@@ -1771,7 +1765,6 @@ void controller::startup( std::function<bool()> shutdown, const snapshot_reader_
       elog( "No head block in fork db, perhaps we need to replay" );
    }
    my->init(shutdown, snapshot);
-   core_symbol(symbol(get_core_symbol().core_symbol).name());
 
    set_blackwhitelist();
 }
@@ -2069,10 +2062,6 @@ const dynamic_global_property_object& controller::get_dynamic_global_properties(
 }
 const global_property_object& controller::get_global_properties()const {
   return my->db.get<global_property_object>();
-}
-
-const core_symbol_object& controller::get_core_symbol()const {
-   return my->db.get<core_symbol_object>();
 }
 
 signed_block_ptr controller::fetch_block_by_id( block_id_type id )const {

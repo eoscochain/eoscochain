@@ -9,11 +9,6 @@
 
 namespace eosiosystem {
 
-   uint64_t system_token_symbol() {
-     static auto symbol =  core_symbol();
-     return symbol;
-   }
-
    system_contract::system_contract( account_name s )
    :native(s),
     _voters(_self,_self),
@@ -27,7 +22,7 @@ namespace eosiosystem {
       auto itr = _rammarket.find(S(4,RAMCORE));
 
       if( itr == _rammarket.end() ) {
-         auto system_token_supply   = eosio::token(N(eosio.token)).get_supply(eosio::symbol_type(system_token_symbol()).name()).amount;
+         auto system_token_supply   = eosio::token(N(eosio.token)).get_supply(eosio::symbol_type(system_token_symbol).name()).amount;
          if( system_token_supply > 0 ) {
             itr = _rammarket.emplace( _self, [&]( auto& m ) {
                m.supply.amount = 100000000000000ll;
@@ -35,7 +30,7 @@ namespace eosiosystem {
                m.base.balance.amount = int64_t(_gstate.free_ram());
                m.base.balance.symbol = S(0,RAM);
                m.quote.balance.amount = system_token_supply / 1000;
-               m.quote.balance.symbol = core_symbol();
+               m.quote.balance.symbol = CORE_SYMBOL;
             });
          }
       } else {

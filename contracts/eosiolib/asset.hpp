@@ -3,7 +3,6 @@
 #include <eosiolib/print.hpp>
 #include <eosiolib/system.h>
 #include <eosiolib/symbol.hpp>
-#include <eosiolib/symbol.h>
 #include <tuple>
 #include <limits>
 
@@ -57,14 +56,12 @@ namespace eosio {
        * @param a - The amount of the asset
        * @param s - THe name of the symbol, default to CORE_SYMBOL
        */
-      explicit asset( int64_t a, symbol_type s )
+      explicit asset( int64_t a = 0, symbol_type s = CORE_SYMBOL )
       :amount(a),symbol{s}
       {
          eosio_assert( is_amount_within_range(), "magnitude of asset amount must be less than 2^62" );
          eosio_assert( symbol.is_valid(),        "invalid symbol name" );
       }
-
-      explicit asset( int64_t a = 0 ) : asset(a, core_symbol()) {}
 
       /**
        * Check if the amount doesn't exceed the max amount

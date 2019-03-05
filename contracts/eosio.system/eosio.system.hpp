@@ -9,7 +9,6 @@
 #include <eosiolib/time.hpp>
 #include <eosiolib/privileged.hpp>
 #include <eosiolib/singleton.hpp>
-#include <eosiolib/symbol.h>
 #include <eosio.system/exchange_state.hpp>
 
 #include <string>
@@ -135,7 +134,7 @@ namespace eosiosystem {
 
    //   static constexpr uint32_t     max_inflation_rate = 5;  // 5% annual inflation
    static constexpr uint32_t     seconds_per_day = 24 * 3600;
-   uint64_t system_token_symbol();
+   static constexpr uint64_t     system_token_symbol = CORE_SYMBOL;
 
    class system_contract : public native {
       private:
