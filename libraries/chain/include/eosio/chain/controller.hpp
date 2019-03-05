@@ -61,6 +61,13 @@ namespace eosio { namespace chain {
             flat_set<account_name>   contract_blacklist;
             flat_set< pair<account_name, action_name> > action_blacklist;
             flat_set<public_key_type> key_blacklist;
+            flat_set<account_name>   offchain_sender_bypass_whiteblacklist;
+            flat_set<account_name>   offchain_actor_whitelist;
+            flat_set<account_name>   offchain_actor_blacklist;
+            flat_set<account_name>   offchain_contract_whitelist;
+            flat_set<account_name>   offchain_contract_blacklist;
+            flat_set< pair<account_name, action_name> > offchain_action_blacklist;
+            flat_set<public_key_type> offchain_key_blacklist;
             path                     blocks_dir             =  chain::config::default_blocks_dir_name;
             path                     state_dir              =  chain::config::default_state_dir_name;
             uint64_t                 state_size             =  chain::config::default_state_size;
@@ -102,7 +109,7 @@ namespace eosio { namespace chain {
           * Starts a new pending block session upon which new transactions can
           * be pushed.
           */
-         void start_block( block_timestamp_type time = block_timestamp_type(), uint16_t confirm_block_count = 0 );
+         void start_block( block_timestamp_type time = block_timestamp_type(), uint16_t confirm_block_count = 0, std::function<signature_type(digest_type)> signer = nullptr );
 
          void abort_block();
 
@@ -151,6 +158,7 @@ namespace eosio { namespace chain {
          const authorization_manager&          get_authorization_manager()const;
          authorization_manager&                get_mutable_authorization_manager();
 
+         const flat_set<account_name>&   get_sender_bypass_whiteblacklist() const;
          const flat_set<account_name>&   get_actor_whitelist() const;
          const flat_set<account_name>&   get_actor_blacklist() const;
          const flat_set<account_name>&   get_contract_whitelist() const;
@@ -158,12 +166,21 @@ namespace eosio { namespace chain {
          const flat_set< pair<account_name, action_name> >& get_action_blacklist() const;
          const flat_set<public_key_type>& get_key_blacklist() const;
 
-         void   set_actor_whitelist( const flat_set<account_name>& );
-         void   set_actor_blacklist( const flat_set<account_name>& );
-         void   set_contract_whitelist( const flat_set<account_name>& );
-         void   set_contract_blacklist( const flat_set<account_name>& );
-         void   set_action_blacklist( const flat_set< pair<account_name, action_name> >& );
-         void   set_key_blacklist( const flat_set<public_key_type>& );
+         // void set_offchain_sender_bypass_whitelist( const flat_set<account_name>& );
+         void set_offchain_actor_whitelist( const flat_set<account_name>& );
+         void set_offchain_actor_blacklist( const flat_set<account_name>& );
+         void set_offchain_contract_whitelist( const flat_set<account_name>& );
+         void set_offchain_contract_blacklist( const flat_set<account_name>& );
+         void set_offchain_action_blacklist( const flat_set< pair<account_name, action_name> >& );
+         void set_offchain_key_blacklist( const flat_set<public_key_type>& );
+         void update_onchain_sender_bypass_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv );
+         void update_onchain_actor_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv );
+         void update_onchain_actor_blacklist( const flat_set<account_name>& add, const flat_set<account_name>& rmv );
+         void update_onchain_contract_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv );
+         void update_onchain_contract_blacklist( const flat_set<account_name>& add, const flat_set<account_name>& rmv );
+         void update_onchain_action_blacklist( const flat_set< pair<account_name, action_name> >& add, const flat_set< pair<account_name, action_name> >& rmv );
+         void update_onchain_key_blacklist( const flat_set<public_key_type>& add, const flat_set<public_key_type>& rmv );
+         void set_blackwhitelist();
 
          uint32_t             head_block_num()const;
          time_point           head_block_time()const;
@@ -182,6 +199,7 @@ namespace eosio { namespace chain {
          optional<block_id_type> pending_producer_block_id()const;
 
          const producer_schedule_type&    active_producers()const;
+         std::function<signature_type(digest_type)> pending_producer_signer()const;
          const producer_schedule_type&    pending_producers()const;
          optional<producer_schedule_type> proposed_producers()const;
 

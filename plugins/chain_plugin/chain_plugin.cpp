@@ -351,17 +351,17 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
 
       my->chain_config = controller::config();
 
-      LOAD_VALUE_SET( options, "sender-bypass-whiteblacklist", my->chain_config->sender_bypass_whiteblacklist );
-      LOAD_VALUE_SET( options, "actor-whitelist", my->chain_config->actor_whitelist );
-      LOAD_VALUE_SET( options, "actor-blacklist", my->chain_config->actor_blacklist );
-      LOAD_VALUE_SET( options, "contract-whitelist", my->chain_config->contract_whitelist );
-      LOAD_VALUE_SET( options, "contract-blacklist", my->chain_config->contract_blacklist );
+      LOAD_VALUE_SET( options, "sender-bypass-whiteblacklist", my->chain_config->offchain_sender_bypass_whiteblacklist );
+      LOAD_VALUE_SET( options, "actor-whitelist", my->chain_config->offchain_actor_whitelist );
+      LOAD_VALUE_SET( options, "actor-blacklist", my->chain_config->offchain_actor_blacklist );
+      LOAD_VALUE_SET( options, "contract-whitelist", my->chain_config->offchain_contract_whitelist );
+      LOAD_VALUE_SET( options, "contract-blacklist", my->chain_config->offchain_contract_blacklist );
 
       LOAD_VALUE_SET( options, "trusted-producer", my->chain_config->trusted_producers );
 
       if( options.count( "action-blacklist" )) {
          const std::vector<std::string>& acts = options["action-blacklist"].as<std::vector<std::string>>();
-         auto& list = my->chain_config->action_blacklist;
+         auto& list = my->chain_config->offchain_action_blacklist;
          for( const auto& a : acts ) {
             auto pos = a.find( "::" );
             EOS_ASSERT( pos != std::string::npos, plugin_config_exception, "Invalid entry in action-blacklist: '${a}'", ("a", a));
@@ -373,7 +373,7 @@ void chain_plugin::plugin_initialize(const variables_map& options) {
 
       if( options.count( "key-blacklist" )) {
          const std::vector<std::string>& keys = options["key-blacklist"].as<std::vector<std::string>>();
-         auto& list = my->chain_config->key_blacklist;
+         auto& list = my->chain_config->offchain_key_blacklist;
          for( const auto& key_str : keys ) {
             list.emplace( key_str );
          }

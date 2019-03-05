@@ -16,6 +16,7 @@
 #include <eosio/chain/generated_transaction_object.hpp>
 #include <eosio/chain/transaction_object.hpp>
 #include <eosio/chain/reversible_block_object.hpp>
+#include <eosio/chain/blackwhitelist_object.hpp>
 
 #include <eosio/chain/authorization_manager.hpp>
 #include <eosio/chain/resource_limits.hpp>
@@ -41,7 +42,8 @@ using controller_index_set = index_set<
    block_summary_multi_index,
    transaction_multi_index,
    generated_transaction_multi_index,
-   table_id_multi_index
+   table_id_multi_index,
+   blackwhitelist_multi_index
 >;
 
 using contract_database_index_set = index_set<
@@ -113,6 +115,8 @@ struct pending_state {
    controller::block_status           _block_status = controller::block_status::incomplete;
 
    optional<block_id_type>            _producer_block_id;
+
+   std::function<signature_type(digest_type)> _signer;
 
    void push() {
       _db_session.push();
@@ -658,6 +662,8 @@ struct controller_impl {
          cs.core_symbol = core_symbol();
       });
 
+      db.create<blackwhitelist_object>([](auto&){});
+
       authorization.initialize_database();
       resource_limits.initialize_database();
 
@@ -1115,7 +1121,8 @@ struct controller_impl {
 
 
    void start_block( block_timestamp_type when, uint16_t confirm_block_count, controller::block_status s,
-                     const optional<block_id_type>& producer_block_id )
+                     const optional<block_id_type>& producer_block_id ,
+                     std::function<signature_type(digest_type)> signer = nullptr )
    {
       EOS_ASSERT( !pending, block_validate_exception, "pending block already exists" );
 
@@ -1134,6 +1141,7 @@ struct controller_impl {
 
       pending->_block_status = s;
       pending->_producer_block_id = producer_block_id;
+      pending->_signer = signer;
       pending->_pending_block_state = std::make_shared<block_state>( *head, when ); // promotes pending schedule (if any) to active
       pending->_pending_block_state->in_current_chain = true;
 
@@ -1201,9 +1209,12 @@ struct controller_impl {
 
    void apply_block( const signed_block_ptr& b, controller::block_status s ) { try {
       try {
-         EOS_ASSERT( b->block_extensions.size() == 0, block_validate_exception, "no supported extensions" );
+         // EOS_ASSERT( b->block_extensions.size() == 0, block_validate_exception, "no supported extensions" );
          auto producer_block_id = b->id();
          start_block( b->timestamp, b->confirmed, s , producer_block_id);
+
+         pending->_pending_block_state->block->header_extensions = b->header_extensions;
+         pending->_pending_block_state->block->block_extensions = b->block_extensions;
 
          std::vector<transaction_metadata_ptr> packed_transactions;
          packed_transactions.reserve( b->transactions.size() );
@@ -1449,6 +1460,12 @@ struct controller_impl {
       pending->_pending_block_state->header.transaction_mroot = merkle( move(trx_digests) );
    }
 
+   void set_block_extensions_hash() {
+      const auto& e = pending->_pending_block_state->block->block_extensions;
+      if (not e.empty()) {
+         pending->_pending_block_state->header.set_block_extensions_hash(digest_type::hash(e));
+      }
+   }
 
    void finalize_block()
    {
@@ -1483,6 +1500,7 @@ struct controller_impl {
 
       set_action_merkle();
       set_trx_merkle();
+      set_block_extensions_hash();
 
       auto p = pending->_pending_block_state;
       p->id = p->header.id();
@@ -1754,6 +1772,8 @@ void controller::startup( std::function<bool()> shutdown, const snapshot_reader_
    }
    my->init(shutdown, snapshot);
    core_symbol(symbol(get_core_symbol().core_symbol).name());
+
+   set_blackwhitelist();
 }
 
 const chainbase::database& controller::db()const { return my->db; }
@@ -1763,9 +1783,10 @@ chainbase::database& controller::mutable_db()const { return my->db; }
 const fork_database& controller::fork_db()const { return my->fork_db; }
 
 
-void controller::start_block( block_timestamp_type when, uint16_t confirm_block_count) {
+void controller::start_block( block_timestamp_type when, uint16_t confirm_block_count,
+                              std::function<signature_type(digest_type)> signer ) {
    validate_db_available_size();
-   my->start_block(when, confirm_block_count, block_status::incomplete, optional<block_id_type>() );
+   my->start_block(when, confirm_block_count, block_status::incomplete, optional<block_id_type>() , signer);
 }
 
 void controller::finalize_block() {
@@ -1814,6 +1835,9 @@ transaction_trace_ptr controller::push_scheduled_transaction( const transaction_
    return my->push_scheduled_transaction( trxid, deadline, billed_cpu_time_us, billed_cpu_time_us > 0 );
 }
 
+const flat_set<account_name>& controller::get_sender_bypass_whiteblacklist() const {
+   return my->conf.sender_bypass_whiteblacklist;
+}
 const flat_set<account_name>& controller::get_actor_whitelist() const {
    return my->conf.actor_whitelist;
 }
@@ -1833,27 +1857,142 @@ const flat_set<public_key_type>& controller::get_key_blacklist() const {
    return my->conf.key_blacklist;
 }
 
-void controller::set_actor_whitelist( const flat_set<account_name>& new_actor_whitelist ) {
-   my->conf.actor_whitelist = new_actor_whitelist;
+void controller::set_blackwhitelist() {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   ilog("blackwhitelist: ${bw}", ("bw", bw.blackwhitelist));
+
+   auto sender_bypass_whiteblacklist = my->conf.offchain_sender_bypass_whiteblacklist;
+   sender_bypass_whiteblacklist.insert(bw.blackwhitelist.sender_bypass_whiteblacklist.cbegin(), bw.blackwhitelist.sender_bypass_whiteblacklist.cend());
+
+   auto actor_whitelist = my->conf.offchain_actor_whitelist;
+   actor_whitelist.insert(bw.blackwhitelist.actor_whitelist.cbegin(), bw.blackwhitelist.actor_whitelist.cend());
+
+   auto actor_blacklist = my->conf.offchain_actor_blacklist;
+   actor_blacklist.insert(bw.blackwhitelist.actor_blacklist.cbegin(), bw.blackwhitelist.actor_blacklist.cend());
+
+   auto contract_whitelist = my->conf.offchain_contract_whitelist;
+   contract_whitelist.insert(bw.blackwhitelist.contract_whitelist.cbegin(), bw.blackwhitelist.contract_whitelist.cend());
+
+   auto contract_blacklist = my->conf.offchain_contract_blacklist;
+   contract_blacklist.insert(bw.blackwhitelist.contract_blacklist.cbegin(), bw.blackwhitelist.contract_blacklist.cend());
+
+   auto action_blacklist = my->conf.offchain_action_blacklist;
+   action_blacklist.insert(bw.blackwhitelist.action_blacklist.cbegin(), bw.blackwhitelist.action_blacklist.cend());
+
+   auto key_blacklist = my->conf.offchain_key_blacklist;
+   key_blacklist.insert(bw.blackwhitelist.key_blacklist.cbegin(), bw.blackwhitelist.key_blacklist.cend());
+
+   my->conf.sender_bypass_whiteblacklist = fc::move(sender_bypass_whiteblacklist);
+   my->conf.actor_whitelist = fc::move(actor_whitelist);
+   my->conf.actor_blacklist = fc::move(actor_blacklist);
+   my->conf.contract_whitelist = fc::move(contract_whitelist);
+   my->conf.contract_blacklist = fc::move(contract_blacklist);
+   my->conf.action_blacklist = fc::move(action_blacklist);
+   my->conf.key_blacklist = fc::move(key_blacklist);
 }
-void controller::set_actor_blacklist( const flat_set<account_name>& new_actor_blacklist ) {
-   my->conf.actor_blacklist = new_actor_blacklist;
+
+void controller::set_offchain_actor_whitelist( const flat_set<account_name>& new_actor_whitelist ) {
+   my->conf.offchain_actor_whitelist = new_actor_whitelist;
+   set_blackwhitelist();
 }
-void controller::set_contract_whitelist( const flat_set<account_name>& new_contract_whitelist ) {
-   my->conf.contract_whitelist = new_contract_whitelist;
+void controller::set_offchain_actor_blacklist( const flat_set<account_name>& new_actor_blacklist ) {
+   my->conf.offchain_actor_blacklist = new_actor_blacklist;
+   set_blackwhitelist();
 }
-void controller::set_contract_blacklist( const flat_set<account_name>& new_contract_blacklist ) {
-   my->conf.contract_blacklist = new_contract_blacklist;
+
+void controller::set_offchain_contract_whitelist( const flat_set<account_name>& new_contract_whitelist ) {
+   my->conf.offchain_contract_whitelist = new_contract_whitelist;
+   set_blackwhitelist();
 }
-void controller::set_action_blacklist( const flat_set< pair<account_name, action_name> >& new_action_blacklist ) {
+void controller::set_offchain_contract_blacklist( const flat_set<account_name>& new_contract_blacklist ) {
+   my->conf.offchain_contract_blacklist = new_contract_blacklist;
+   set_blackwhitelist();
+}
+void controller::set_offchain_action_blacklist( const flat_set< pair<account_name, action_name> >& new_action_blacklist ) {
    for (auto& act: new_action_blacklist) {
       EOS_ASSERT(act.first != account_name(), name_type_exception, "Action blacklist - contract name should not be empty");
       EOS_ASSERT(act.second != action_name(), action_type_exception, "Action blacklist - action name should not be empty");
    }
-   my->conf.action_blacklist = new_action_blacklist;
+
+   my->conf.offchain_action_blacklist = new_action_blacklist;
+   set_blackwhitelist();
 }
-void controller::set_key_blacklist( const flat_set<public_key_type>& new_key_blacklist ) {
-   my->conf.key_blacklist = new_key_blacklist;
+void controller::set_offchain_key_blacklist( const flat_set<public_key_type>& new_key_blacklist ) {
+   my->conf.offchain_key_blacklist = new_key_blacklist;
+   set_blackwhitelist();
+}
+
+template<typename T>
+shared_vector<T> update_list(const shared_vector<T> &list, const flat_set<T> &add, const flat_set<T> &rmv) {
+   flat_set<T> set;
+   for (auto& a: list) set.insert(a);
+   for (auto& a: add) {
+      EOS_ASSERT(not set.count(a), action_validate_exception, "existing account");
+      EOS_ASSERT(not rmv.count(a), action_validate_exception, "cannot both add and rmv");
+      set.insert(a);
+   }
+   for (auto& a: rmv) {
+      EOS_ASSERT(set.count(a), action_validate_exception, "nonexistent account" );
+      set.erase(a);
+   }
+   return shared_vector<T>(set.cbegin(), set.cend(), list.get_allocator());
+}
+
+void controller::update_onchain_sender_bypass_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.sender_bypass_whiteblacklist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
+}
+void controller::update_onchain_actor_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.actor_whitelist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
+}
+void controller::update_onchain_actor_blacklist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.actor_blacklist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
+}
+void controller::update_onchain_contract_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.contract_whitelist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
+}
+void controller::update_onchain_contract_blacklist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.contract_blacklist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
+}
+void controller::update_onchain_action_blacklist( const flat_set< pair<account_name, action_name> >& add, const flat_set< pair<account_name, action_name> >& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.action_blacklist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
+}
+void controller::update_onchain_key_blacklist( const flat_set<public_key_type>& add, const flat_set<public_key_type>& rmv ) {
+   const auto& bw = my->db.get<blackwhitelist_object>();
+   my->db.modify(bw, [&](blackwhitelist_object& bw) {
+      auto& list = bw.blackwhitelist.key_blacklist;
+      list = update_list(list, add, rmv);
+   });
+   set_blackwhitelist();
 }
 
 uint32_t controller::head_block_num()const {
@@ -1903,6 +2042,11 @@ time_point controller::pending_block_time()const {
 optional<block_id_type> controller::pending_producer_block_id()const {
    EOS_ASSERT( my->pending, block_validate_exception, "no pending block" );
    return my->pending->_producer_block_id;
+}
+
+std::function<signature_type(digest_type)> controller::pending_producer_signer()const {
+   EOS_ASSERT( my->pending, block_validate_exception, "no pending block" );
+   return my->pending->_signer;
 }
 
 uint32_t controller::last_irreversible_block_num() const {

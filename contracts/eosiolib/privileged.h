@@ -107,6 +107,11 @@ extern "C" {
     */
    void activate_feature( int64_t f );
 
+   /**
+    * @brief Update black & white list
+    */
+   void update_blackwhitelist();
+
    ///@ } privilegedcapi
 #ifdef __cplusplus
 }
