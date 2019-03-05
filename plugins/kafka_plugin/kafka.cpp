@@ -74,7 +74,7 @@ chainbase::database& get_db() {
     return const_cast<chainbase::database&>(chain.db()); // Override read-only access to state DB (highly unrecommended practice!)
 }
 
-void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversible) {
+void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversible, bool produce) {
     auto id = checksum_bytes(block_state->id);
 
     auto& db = get_db();
@@ -92,8 +92,10 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
 
         b.lib = true;
         auto payload = fc::json::to_string(b, fc::json::legacy_generator);
-        Buffer buffer (b.id.data(), b.id.size());
-        producer_->produce(MessageBuilder(topic_).partition(partition_).key(buffer).payload(payload));
+        Buffer buffer(b.id.data(), b.id.size());
+        if (produce) {
+            producer_->produce(MessageBuilder(topic_).partition(partition_).key(buffer).payload(payload));
+        }
         return;
     }
 
@@ -194,7 +196,9 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
 
     auto payload = fc::json::to_string(*b, fc::json::legacy_generator);
     Buffer buffer (b->id.data(), b->id.size());
-    producer_->produce(MessageBuilder(topic_).partition(partition_).key(buffer).payload(payload));
+    if (produce) {
+        producer_->produce(MessageBuilder(topic_).partition(partition_).key(buffer).payload(payload));
+    }
 
     if (block_state->block_num > 1) { // block 1 only occurred as irreversible block
         auto bc = db.find<block_cache_object, by_block_id>(block_state->id);

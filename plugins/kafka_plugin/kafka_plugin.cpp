@@ -45,6 +45,7 @@ void kafka_plugin::set_program_options(options_description&, options_description
             ("kafka-topic", bpo::value<string>()->default_value("eos"), "Kafka topic for message")
             ("kafka-batch-num-messages", bpo::value<unsigned>()->default_value(1024), "Kafka minimum number of messages to wait for to accumulate in the local queue before sending off a message set")
             ("kafka-queue-buffering-max-ms", bpo::value<unsigned>()->default_value(500), "Kafka how long to wait for kafka-batch-num-messages to fill up in the local queue")
+            ("kafka-message-max-bytes", bpo::value<unsigned>()->default_value(104857600), "Kafka maximum kafka protocol request message size")
             ("kafka-compression-codec", bpo::value<compression_codec>()->value_name("none/gzip/snappy/lz4"), "Kafka compression codec to use for compressing message sets, default is snappy")
             ("kafka-request-required-acks", bpo::value<int>()->default_value(1), "Kafka indicates how many acknowledgements the leader broker must receive from ISR brokers before responding to the request: 0=Broker does not send any response/ack to client, 1=Only the leader broker will need to ack the message, -1=broker will block until message is committed by all in sync replicas (ISRs) or broker's min.insync.replicas setting before sending response")
             ("kafka-message-send-max-retries", bpo::value<unsigned>()->default_value(2), "Kafka how many times to retry sending a failing MessageSet")
@@ -62,6 +63,11 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
 
     ilog("Initialize kafka plugin");
+
+    chain_plugin_ = app().find_plugin<chain_plugin>();
+    auto& chain = chain_plugin_->chain();
+
+    EOS_ASSERT(chain.get_read_mode() == chain::db_read_mode::READ_ONLY, plugin_config_exception, "kafka_plugin can only be used in read-only mode");
 
     string compressionCodec = "snappy";
     if (options.count("kafka-compression-codec")) {
@@ -85,6 +91,7 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
             {"metadata.broker.list", options.at("kafka-broker-list").as<string>()},
             {"batch.num.messages", options.at("kafka-batch-num-messages").as<unsigned>()},
             {"queue.buffering.max.ms", options.at("kafka-queue-buffering-max-ms").as<unsigned>()},
+            {"message.max.bytes", options.at("kafka-message-max-bytes").as<unsigned>()},
             {"compression.codec", compressionCodec},
             {"request.required.acks", options.at("kafka-request-required-acks").as<int>()},
             {"message.send.max.retries", options.at("kafka-message-send-max-retries").as<unsigned>()},
@@ -108,10 +115,6 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     unsigned reversible_start_block_num = 0;
     if (start_block_num > 340) reversible_start_block_num = start_block_num - 340; // TODO: configure 340 as option
 
-    // add callback to chain_controller config
-    chain_plugin_ = app().find_plugin<chain_plugin>();
-    auto& chain = chain_plugin_->chain();
-
     chainbase::database& db = const_cast<chainbase::database&>( chain.db() ); // Override read-only access to state DB (highly unrecommended practice!)
     db.add_index<block_cache_index>();
     db.add_index<stats_index>();
@@ -131,15 +134,14 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
 
     block_conn_ = chain.accepted_block.connect([=](const chain::block_state_ptr& b) {
-        if (b->block_num < reversible_start_block_num) return;
-        handle([=] { kafka_->push_block(b, false); }, "push block");
+        auto sync = b->block_num >= reversible_start_block_num;
+        handle([=] { kafka_->push_block(b, false, sync); }, "push block");
     });
     irreversible_block_conn_ = chain.irreversible_block.connect([=](const chain::block_state_ptr& b) {
-        if (b->block_num < start_block_num) return;
-        handle([=] { kafka_->push_block(b, true); }, "push irreversible block");
+        auto sync = b->block_num >= start_block_num;
+        handle([=] { kafka_->push_block(b, true, sync); }, "push irreversible block");
     });
     transaction_conn_ = chain.applied_transaction.connect([=](const chain::transaction_trace_ptr& t) {
-        if (t->block_num < reversible_start_block_num) return;
         handle([=] { kafka_->push_transaction_trace(t); }, "push transaction");
     });
 
