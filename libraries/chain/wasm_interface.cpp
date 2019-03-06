@@ -1733,7 +1733,6 @@ public:
     : context_aware_api(ctx, true) {}
 
     double strtod(const char *nptr, char **endptr) {
-       EOS_THROW( eosio_assert_message_exception, "strtod: ${s}", ("s",nptr) );
          return std::strtod(nptr, endptr);
     }
 };
