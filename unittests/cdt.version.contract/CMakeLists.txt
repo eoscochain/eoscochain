@@ -1,0 +1,1 @@
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cdt.contracts.hpp.in ${CMAKE_CURRENT_SOURCE_DIR}/cdt.contracts.hpp )
