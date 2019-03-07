@@ -345,6 +345,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     case N(canceldelay): {
                         const auto canceldelay = action_trace.act.data_as<chain::canceldelay>();
                         a->extra = fc::json::to_string(canceldelay.trx_id, fc::json::legacy_generator);
+                        break;
                     }
                     case N(buyrambytes): {
                         const auto brb = fc::raw::unpack<buyrambytes>(data);
