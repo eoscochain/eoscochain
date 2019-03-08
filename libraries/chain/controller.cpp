@@ -1348,8 +1348,8 @@ struct controller_impl {
          }
 
          // on replay irreversible is not emitted by fork database, so emit it explicitly here
-         if( s == controller::block_status::irreversible )
-            emit( self.irreversible_block, new_header_state );
+         // if( s == controller::block_status::irreversible )
+         //    emit( self.irreversible_block, new_header_state );
 
       } FC_LOG_AND_RETHROW( )
    }
