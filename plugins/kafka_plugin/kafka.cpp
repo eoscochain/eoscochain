@@ -289,6 +289,8 @@ void kafka::push_transaction_trace(const chain::transaction_trace_ptr& tx_trace)
 asset get_ram_price();
 voter_info get_voter(const name &voter);
 vector<producer_info> get_producers(const vector<name>& producers);
+vector<voter_bonus> get_voter_bonuses(const vector<name>& producers);
+vector<voter_bonus> get_voter_bonuses(const name& voter);
 void get_voters(const name& from, vector<voter>& voters);
 
 void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent_seq) {
@@ -312,6 +314,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
 
     bool has_ram_deal = false;
     bool has_claimed_rewards = false;
+    bool has_claimed_bonus = false;
 
     try {
         // get any extra data
@@ -439,9 +442,20 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                         const auto cr = fc::raw::unpack<claimrewards>(data);
                         cached_claimed_rewards_[a->global_seq] = claimed_rewards{
                             .owner = cr.owner,
-                            .quantity = asset()
+                            .quantity = asset(),
+                            .voter_bonus_balance = asset()
                         };
                         has_claimed_rewards = true;
+                        break;
+                    }
+                    case N(claimbonus): {
+                        const auto cb = fc::raw::unpack<claimbonus>(data);
+                        cached_claimed_bonus_[a->global_seq] = claimed_bonus{
+                            .owner = cb.owner,
+                            .quantity = asset(),
+                            .balances = {}
+                        };
+                        has_claimed_bonus = true;
                         break;
                     }
                 }
@@ -482,9 +496,17 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                             auto it = cached_ram_deals_.find(a->parent_seq);
                             if (it != cached_ram_deals_.end()) it->second.quantity -= transfer_data.quantity;
                         } else if (transfer_data.from == N(eosio.bpay) or transfer_data.from == N(eosio.vpay)) { // producer block/vote pay
-                            auto it = cached_claimed_rewards_.find(a->parent_seq);
-                            if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
-                                it->second.quantity += transfer_data.quantity;
+                            {
+                                auto it = cached_claimed_rewards_.find(a->parent_seq);
+                                if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
+                                    it->second.quantity += transfer_data.quantity;
+                                }
+                            }
+                            {
+                                auto it = cached_claimed_bonus_.find(a->parent_seq);
+                                if (it != cached_claimed_bonus_.end() and it->second.owner == transfer_data.to) {
+                                    it->second.quantity += transfer_data.quantity;
+                                }
                             }
                         }
                     }
@@ -514,9 +536,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     if (has_claimed_rewards) {
         auto it = cached_claimed_rewards_.find(a->global_seq);
         if (it != cached_claimed_rewards_.end()) {
-            auto plugin = app().find_plugin<chain_plugin>();
-            auto& chain = plugin->chain();
-            chainbase::database& db = const_cast<chainbase::database&>(chain.db()); // Override read-only access to state DB (highly unrecommended practice!)
+            auto& db = get_db();
 
             auto p = db.find<producer_stats_object, by_producer>(it->second.owner);
             if (not p) {
@@ -534,6 +554,36 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                 });
             }
 
+            auto vb = get_voter_bonuses(vector<name>{it->second.owner});
+            if (not vb.empty()) {
+                it->second.voter_bonus_balance = vb.front().balance;
+            }
+
+            a->extra = fc::json::to_string(it->second, fc::json::legacy_generator);
+        }
+    }
+
+    if (has_claimed_bonus) {
+        auto it = cached_claimed_bonus_.find(a->global_seq);
+        if (it != cached_claimed_bonus_.end()) {
+            auto& db = get_db();
+
+            auto v = db.find<voter_stats_object, by_voter>(it->second.owner);
+            if (not v) {
+                db.create<voter_stats_object>([&](auto &vs) {
+                    vs.voter = it->second.owner;
+                    vs.claimed_bonus = it->second.quantity;
+                });
+            } else {
+                it->second.quantity += v->claimed_bonus; // add
+                db.modify(*v, [&](voter_stats_object &vs) {
+                    vs.claimed_bonus = it->second.quantity;
+                });
+            }
+
+            auto vb = get_voter_bonuses(it->second.owner);
+            it->second.balances = fc::move(vb);
+
             a->extra = fc::json::to_string(it->second, fc::json::legacy_generator);
         }
     }
@@ -541,6 +591,7 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     if (parent_seq == 0) {
         if (not cached_ram_deals_.empty()) cached_ram_deals_.clear();
         if (not cached_claimed_rewards_.empty()) cached_claimed_rewards_.clear();
+        if (not cached_claimed_bonus_.empty()) cached_claimed_bonus_.clear();
     }
 }
 
@@ -701,12 +752,46 @@ vector<producer_info> get_producers(const vector<name>& producers) {
     return result;
 }
 
+vector<voter_bonus> get_voter_bonuses(const vector<name>& producers) {
+    auto& chain = app().get_plugin<chain_plugin>();
+    auto ro_api = chain.get_read_only_api();
+
+    vector<string> ps;
+    ps.reserve(producers.size());
+    for (auto& p: producers) {
+        ps.push_back(p.to_string());
+    }
+
+    auto r = ro_api.get_voter_bonuses_by_names(chain_apis::read_only::get_voter_bonuses_by_names_params{.producers = ps});
+
+    vector<voter_bonus> result;
+    result.reserve(r.size());
+    for (auto& p: r) {
+       if (not p.is_null()) result.push_back(fc::raw::unpack<voter_bonus>(p.as<vector<char>>()));
+    }
+    return result;
+}
+
+vector<voter_bonus> get_voter_bonuses(const name& voter) {
+    const auto v = get_voter(voter);
+
+    vector<name> producers;
+    if (v.proxy) {
+        auto p = get_voter(v.proxy);
+        producers = p.producers;
+    } else {
+        producers = v.producers;
+    }
+
+    return get_voter_bonuses(producers);
+}
+
 void get_voters(const name& from, vector<voter>& voters) {
     auto v = get_voter(from);
 
     voter result{
        .owner = v.owner, .proxy = v.proxy, .staked = v.staked, .last_vote_weight = v.last_vote_weight,
-       .proxied_vote_weight = v.proxied_vote_weight, .is_proxy = v.is_proxy
+       .proxied_vote_weight = v.proxied_vote_weight, .is_proxy = v.is_proxy, .last_change_time = v.last_change_time
     };
     if (not v.producers.empty()) {
         auto producers = get_producers(v.producers);

@@ -48,6 +48,7 @@ private:
     std::unordered_map<uint64_t, ram_deal> cached_ram_deals_;
 
     std::unordered_map<uint64_t, claimed_rewards> cached_claimed_rewards_;
+    std::unordered_map<uint64_t, claimed_bonus> cached_claimed_bonus_; // only valid for eoscochain
 };
 
 }

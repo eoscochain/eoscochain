@@ -1435,6 +1435,36 @@ vector<fc::variant> read_only::get_producers_by_names ( const get_producers_by_n
    return result;
 }
 
+vector<fc::variant> read_only::get_voter_bonuses_by_names ( const get_voter_bonuses_by_names_params& params ) const {
+   const abi_def abi = eosio::chain_apis::get_abi(db, config::system_account_name);
+   const auto table_type = get_table_type(abi, N(voterbonus));
+   EOS_ASSERT(table_type == KEYi64, chain::contract_table_query_exception, "Invalid table type ${type} for table voterbonus", ("type",table_type));
+
+   vector<fc::variant> result;
+   result.reserve(params.producers.size());
+
+   get_table_rows_params p;
+   p.json = params.json;
+   p.code = config::system_account_name;
+   p.scope = name(config::system_account_name).to_string();
+   p.table = N(voterbonus);
+   p.limit = 1;
+   p.key_type = "name";
+
+   for (const auto& producer: params.producers) {
+      p.lower_bound = producer;
+      p.upper_bound = producer;
+      auto r = get_table_rows_ex<key_value_index>(p, abi);
+      if (not r.rows.empty()) {
+         result.push_back(fc::move(r.rows.front()));
+      } else {
+         result.push_back(fc::variant()); // push back null value
+      }
+   }
+
+   return result;
+}
+
 read_only::get_producer_schedule_result read_only::get_producer_schedule( const read_only::get_producer_schedule_params& p ) const {
    read_only::get_producer_schedule_result result;
    to_variant(db.active_producers(), result.active);

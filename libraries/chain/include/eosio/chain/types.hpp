@@ -191,6 +191,7 @@ namespace eosio { namespace chain {
       block_cache_object_type, ///< Defined by kafka_plugin
       stats_object_type, ///< Defined by kafka_plugin
       producer_stats_object_type, ///< Defined by kafka_plugin
+      voter_stats_object_type, ///< Defined by kafka_plugin
       OBJECT_TYPE_COUNT ///< Sentry value which contains the number of different object types
    };
 
