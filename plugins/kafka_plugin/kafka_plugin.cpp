@@ -67,7 +67,7 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     chain_plugin_ = app().find_plugin<chain_plugin>();
     auto& chain = chain_plugin_->chain();
 
-    EOS_ASSERT(chain.get_read_mode() == chain::db_read_mode::READ_ONLY, plugin_config_exception, "kafka_plugin can only be used in read-only mode");
+    // EOS_ASSERT(chain.get_read_mode() == chain::db_read_mode::READ_ONLY, plugin_config_exception, "kafka_plugin can only be used in read-only mode");
 
     string compressionCodec = "snappy";
     if (options.count("kafka-compression-codec")) {
