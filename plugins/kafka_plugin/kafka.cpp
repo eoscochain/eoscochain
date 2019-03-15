@@ -55,7 +55,27 @@ void kafka::set_partition(int partition) {
     partition_ =  partition;
 }
 
+void kafka::set_poll_interval(unsigned interval) {
+    poll_interval_ = interval;
+}
+
 void kafka::start() {
+    config_.set_error_callback([&](KafkaHandleBase& handle, int error, const std::string& reason) {
+       if (error == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN) {
+           elog("error_callback: err ${error} ${reason}", ("error", error)("reason", reason));
+       }
+    });
+
+    config_.set_delivery_report_callback([&](Producer& producer, const Message& msg) {
+        auto err = msg.get_error();
+        if (bool(err)) {
+            const auto& key = msg.get_key();
+            block_id_type id(reinterpret_cast<const char*>(key.get_data()), key.get_size());
+            auto num = block_header::num_from_id(id);
+            elog("delivery_report_callback: block id ${id}, block num ${num}, err ${err}", ("id", id)("num", num)("err", err.to_string()));
+        }
+    });
+
     producer_ = std::make_unique<Producer>(config_);
 
     auto conf = producer_->get_configuration().get_all();
@@ -75,6 +95,18 @@ chainbase::database& get_db() {
 }
 
 void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversible, bool produce) {
+    ++poll_counter_;
+    if (poll_counter_ >= poll_interval_) { // trigger error callback or delivery report callback
+        poll_counter_ = 0; // reset counter
+        try {
+            producer_->flush();
+        } catch (const std::exception& e) {
+            elog("flush failed: block id ${id}, block num ${num}", ("id", block_state->id)("num", block_state->block_num));
+            producer_->poll();
+            throw;
+        }
+    }
+
     auto id = checksum_bytes(block_state->id);
 
     auto& db = get_db();
@@ -103,7 +135,7 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
     auto b = std::make_shared<Block>();
 
     {
-        ++producer_stats_interval_; // increase counter
+        ++producer_stats_counter_; // increase counter
 
         if (not producer_schedule_) { // initial set producer schedule
             producer_schedule_ = std::make_unique<producer_schedule>();
@@ -112,8 +144,8 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
                 producer_schedule_->producers.push_back(p.producer_name);
             }
         } else if (block_state->active_schedule.version > producer_schedule_->version or // must stats when producer schedule changed
-                    producer_stats_interval_ >= producer_schedule_->producers.size() * config::producer_repetitions) { // trigger stats every producing loop
-            producer_stats_interval_ = 0; // reset counter
+                    producer_stats_counter_ >= producer_schedule_->producers.size() * config::producer_repetitions) { // trigger stats every producing loop
+            producer_stats_counter_ = 0; // reset counter
 
             for (const auto& p: producer_schedule_->producers) {
                 auto ps = db.get<producer_stats_object, by_producer>(p);
@@ -488,24 +520,35 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     if (a->account == N(eosio.token)) {
                         if (transfer_data.from == N(eosio.ram) or transfer_data.from == N(eosio.ramfee)) { // buy
                            auto it = cached_ram_deals_.find(a->parent_seq);
-                           if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
+                           if (it != cached_ram_deals_.end()) {
+                               if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
+                               else it->second.quantity += transfer_data.quantity;
+                           }
                         } else if (transfer_data.to == N(eosio.ram)) { // sell
                             auto it = cached_ram_deals_.find(a->parent_seq);
-                            if (it != cached_ram_deals_.end()) it->second.quantity += transfer_data.quantity;
+                            if (it != cached_ram_deals_.end()) {
+                                if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
+                                else it->second.quantity += transfer_data.quantity;
+                            }
                         } else if (transfer_data.to == N(eosio.ramfee)) { // sell
                             auto it = cached_ram_deals_.find(a->parent_seq);
-                            if (it != cached_ram_deals_.end()) it->second.quantity -= transfer_data.quantity;
+                            if (it != cached_ram_deals_.end()) {
+                                if (it->second.quantity.get_amount() == 0) it->second.quantity = -transfer_data.quantity;
+                                else it->second.quantity -= transfer_data.quantity;
+                            }
                         } else if (transfer_data.from == N(eosio.bpay) or transfer_data.from == N(eosio.vpay)) { // producer block/vote pay
                             {
                                 auto it = cached_claimed_rewards_.find(a->parent_seq);
                                 if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
-                                    it->second.quantity += transfer_data.quantity;
+                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
+                                    else it->second.quantity += transfer_data.quantity;
                                 }
                             }
                             {
                                 auto it = cached_claimed_bonus_.find(a->parent_seq);
                                 if (it != cached_claimed_bonus_.end() and it->second.owner == transfer_data.to) {
-                                    it->second.quantity += transfer_data.quantity;
+                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
+                                    else it->second.quantity += transfer_data.quantity;
                                 }
                             }
                         }
@@ -547,7 +590,8 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     ps.claimed_rewards = it->second.quantity;
                 });
             } else {
-                it->second.quantity += p->claimed_rewards; // add
+                if (it->second.quantity.get_amount() == 0) it->second.quantity = p->claimed_rewards;
+                else if (p->claimed_rewards.get_amount() != 0) it->second.quantity += p->claimed_rewards; // add
                 db.modify(*p, [&](producer_stats_object &ps) {
                     ps.claimed_rewards = it->second.quantity;
                     ps.unpaid_blocks = 0; // reset when claim rewards
@@ -575,7 +619,8 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     vs.claimed_bonus = it->second.quantity;
                 });
             } else {
-                it->second.quantity += v->claimed_bonus; // add
+                if (it->second.quantity.get_amount() == 0) it->second.quantity = v->claimed_bonus;
+                else if (v->claimed_bonus.get_amount() != 0) it->second.quantity += v->claimed_bonus; // add
                 db.modify(*v, [&](voter_stats_object &vs) {
                     vs.claimed_bonus = it->second.quantity;
                 });
@@ -595,6 +640,13 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
     }
 }
 
+bool abi_field_def_equal(const vector<chain::field_def>& a, vector<chain::field_def>& b) {
+    for (auto& f: b) {
+        if (f.type == "account_name") f.type = "name"; // adapt to type alias
+    }
+    return std::equal(a.cbegin(), a.cend(), b.cbegin(), b.cend());
+}
+
 bool kafka::is_token(name account) {
     if (cached_tokens_.count(account)) return true;
 
@@ -608,12 +660,9 @@ bool kafka::is_token(name account) {
     if (stat_name.empty()) return false;
     auto stat_struct = abi_serializer->get_struct(stat_name);
     static const vector<chain::field_def> stat_fields{
-        {"supply", "asset"}, {"max_supply", "asset"}, {"issuer", "account_name"}
+        {"supply", "asset"}, {"max_supply", "asset"}, {"issuer", "name"}
     };
-    if (not std::equal(stat_struct.fields.cbegin(),
-                       stat_struct.fields.cend(),
-                       stat_fields.cbegin(),
-                       stat_fields.cend())) {
+    if (not abi_field_def_equal(stat_fields, stat_struct.fields)) {
         return false;
     }
 
@@ -623,10 +672,7 @@ bool kafka::is_token(name account) {
     static const vector<chain::field_def> accounts_fields{
         {"balance", "asset"}
     };
-    if (not std::equal(accounts_struct.fields.cbegin(),
-                       accounts_struct.fields.cend(),
-                       accounts_fields.cbegin(),
-                       accounts_fields.cend())) {
+    if (not abi_field_def_equal(accounts_fields, accounts_struct.fields)) {
         return false;
     }
 
@@ -634,12 +680,9 @@ bool kafka::is_token(name account) {
     if (create_name.empty()) return false;
     auto create_struct = abi_serializer->get_struct(create_name);
     static const vector<chain::field_def> create_fields{
-        {"issuer", "account_name"}, {"maximum_supply", "asset"}
+        {"issuer", "name"}, {"maximum_supply", "asset"}
     };
-    if (not std::equal(create_struct.fields.cbegin(),
-                       create_struct.fields.cend(),
-                       create_fields.cbegin(),
-                       create_fields.cend())) {
+    if (not abi_field_def_equal(create_fields, create_struct.fields)) {
         return false;
     }
 
@@ -647,12 +690,9 @@ bool kafka::is_token(name account) {
     if (issue_name.empty()) return false;
     auto issue_struct = abi_serializer->get_struct(issue_name);
     static const vector<chain::field_def> issue_fields{
-        {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+        {"to", "name"}, {"quantity", "asset"}, {"memo", "string"}
     };
-    if (not std::equal(issue_struct.fields.cbegin(),
-                       issue_struct.fields.cend(),
-                       issue_fields.cbegin(),
-                       issue_fields.cend())) {
+    if (not abi_field_def_equal(issue_fields, issue_struct.fields)) {
         return false;
     }
 
@@ -660,12 +700,9 @@ bool kafka::is_token(name account) {
     if (transfer_name.empty()) return false;
     auto transfer_struct = abi_serializer->get_struct(transfer_name);
     static const vector<chain::field_def> transfer_fields{
-        {"from", "account_name"}, {"to", "account_name"}, {"quantity", "asset"}, {"memo", "string"}
+        {"from", "name"}, {"to", "name"}, {"quantity", "asset"}, {"memo", "string"}
     };
-    if (not std::equal(transfer_struct.fields.cbegin(),
-                       transfer_struct.fields.cend(),
-                       transfer_fields.cbegin(),
-                       transfer_fields.cend())) {
+    if (not abi_field_def_equal(transfer_fields, transfer_struct.fields)) {
         return false;
     }
 

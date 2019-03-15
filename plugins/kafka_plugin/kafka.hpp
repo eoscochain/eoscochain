@@ -19,6 +19,7 @@ public:
     void set_config(Configuration config);
     void set_topic(const string& topic);
     void set_partition(int partition);
+    void set_poll_interval(unsigned interval);
     void start();
     void stop();
 
@@ -35,12 +36,15 @@ private:
 
     int partition_{-1};
 
+    unsigned poll_interval_ = 0;
+    unsigned poll_counter_ = 0;
+
     std::unique_ptr<Producer> producer_;
 
     std::unordered_map<transaction_id_type, chain::transaction_trace_ptr> cached_traces_;
     std::unordered_map<transaction_id_type, vector<ActionPtr>> cached_actions_;
 
-    int producer_stats_interval_ = 0;
+    int producer_stats_counter_ = 0;
     std::unique_ptr<producer_schedule> producer_schedule_;
 
     std::unordered_set<name> cached_tokens_;
