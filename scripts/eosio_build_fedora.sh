@@ -59,6 +59,7 @@ if ! YUM=$( command -v yum 2>/dev/null ); then
 fi
 printf " - Yum installation found at %s.\\n" "${YUM}"
 
+
 if [ $ANSWER != 1 ]; then read -p "Do you wish to update YUM repositories? (y/n) " ANSWER; fi
 case $ANSWER in
 	1 | [Yy]* )
