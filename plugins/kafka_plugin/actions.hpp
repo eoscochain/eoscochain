@@ -4,6 +4,8 @@
 #include <eosio/chain/asset.hpp>
 #include <eosio/chain_plugin/chain_plugin.hpp>
 
+#include "types.hpp"
+
 namespace eosio {
 
 using namespace chain;
@@ -102,11 +104,6 @@ namespace kafka {
 
 using namespace std;
 using namespace eosio::chain;
-
-struct producer_schedule {
-   uint32_t version = 0;
-   vector<name> producers;
-};
 
 struct buyram {
    name buyer;

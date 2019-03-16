@@ -45,7 +45,7 @@ private:
     std::unordered_map<transaction_id_type, vector<ActionPtr>> cached_actions_;
 
     int producer_stats_counter_ = 0;
-    std::unique_ptr<producer_schedule> producer_schedule_;
+    std::unique_ptr<ProducerSchedule> producer_schedule_;
 
     std::unordered_set<name> cached_tokens_;
 

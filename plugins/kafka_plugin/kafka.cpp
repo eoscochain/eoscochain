@@ -138,17 +138,20 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
         ++producer_stats_counter_; // increase counter
 
         if (not producer_schedule_) { // initial set producer schedule
-            producer_schedule_ = std::make_unique<producer_schedule>();
+            producer_schedule_ = std::make_unique<ProducerSchedule>();
             producer_schedule_->version = block_state->active_schedule.version;
             for (const auto& p: block_state->active_schedule.producers) {
-                producer_schedule_->producers.push_back(p.producer_name);
+                producer_schedule_->producers.push_back(p.producer_name.value);
             }
+
+            b->schedule = *producer_schedule_;
+
         } else if (block_state->active_schedule.version > producer_schedule_->version or // must stats when producer schedule changed
                     producer_stats_counter_ >= producer_schedule_->producers.size() * config::producer_repetitions) { // trigger stats every producing loop
             producer_stats_counter_ = 0; // reset counter
 
             for (const auto& p: producer_schedule_->producers) {
-                auto ps = db.get<producer_stats_object, by_producer>(p);
+                auto ps = db.get<producer_stats_object, by_producer>(name(p));
                 b->producer_stats.push_back(ProducerStats{
                     .producer = ps.producer,
                     .produced_blocks = ps.produced_blocks,
@@ -160,8 +163,10 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
                 producer_schedule_->version = block_state->active_schedule.version;
                 producer_schedule_->producers.clear(); // clear old producers
                 for (const auto &p: block_state->active_schedule.producers) {
-                    producer_schedule_->producers.push_back(p.producer_name);
+                    producer_schedule_->producers.push_back(p.producer_name.value);
                 }
+
+                b->schedule = *producer_schedule_;
             }
         }
 

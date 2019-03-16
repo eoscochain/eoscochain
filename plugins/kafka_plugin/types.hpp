@@ -31,6 +31,11 @@ struct ProducerStats {
    uint32_t unpaid_blocks = 0;
 };
 
+struct ProducerSchedule {
+   uint32_t version = 0;
+   std::vector<name_t> producers;
+};
+
 struct Block {
    bytes id;
    unsigned num;
@@ -49,6 +54,7 @@ struct Block {
    std::vector<Action> actions;
    Stats stats;
    std::vector<ProducerStats> producer_stats;
+   fc::optional<ProducerSchedule> schedule; // new producer schedule which takes effect in this block
 };
 
 struct IrreversibleBlock {
@@ -116,7 +122,8 @@ FC_REFLECT(kafka::Stats, (tx_count)(action_count)(context_free_action_count)
                          (max_tx_count_per_block)(max_action_count_per_block)(max_context_free_action_count_per_block)
                          (account_count)(token_count))
 FC_REFLECT(kafka::ProducerStats, (producer)(produced_blocks)(unpaid_blocks))
-FC_REFLECT(kafka::Block, (id)(num)(timestamp)(lib)(block)(tx_count)(action_count)(context_free_action_count)(transactions)(actions)(stats)(producer_stats))
+FC_REFLECT(kafka::ProducerSchedule, (version)(producers))
+FC_REFLECT(kafka::Block, (id)(num)(timestamp)(lib)(block)(tx_count)(action_count)(context_free_action_count)(transactions)(actions)(stats)(producer_stats)(schedule))
 FC_REFLECT(kafka::IrreversibleBlock, (id)(num))
 FC_REFLECT(kafka::Transaction, (id)(block_id)(block_num)(block_time)(block_seq)(status)(net_usage_words)
                                (cpu_usage_us)(exception)(action_count)(context_free_action_count))
