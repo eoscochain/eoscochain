@@ -36,7 +36,6 @@ link_directories(${LLVM_LIBRARY_DIR})
 set( CMAKE_CXX_STANDARD 14 )
 
 add_subdirectory(contracts)
-add_subdirectory(cdt.version.contract)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/contracts.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/contracts.hpp ESCAPE_QUOTES)
 
