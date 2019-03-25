@@ -60,6 +60,7 @@ void kafka::set_poll_interval(unsigned interval) {
 }
 
 void kafka::start() {
+    /*
     config_.set_error_callback([&](KafkaHandleBase& handle, int error, const std::string& reason) {
        if (error == RD_KAFKA_RESP_ERR__ALL_BROKERS_DOWN) {
            elog("error_callback: err ${error} ${reason}", ("error", error)("reason", reason));
@@ -75,6 +76,7 @@ void kafka::start() {
             elog("delivery_report_callback: block id ${id}, block num ${num}, err ${err}", ("id", id)("num", num)("err", err.to_string()));
         }
     });
+    */
 
     producer_ = std::make_unique<Producer>(config_);
 
@@ -99,10 +101,10 @@ void kafka::push_block(const chain::block_state_ptr& block_state, bool irreversi
     if (poll_counter_ >= poll_interval_) { // trigger error callback or delivery report callback
         poll_counter_ = 0; // reset counter
         try {
+            // producer_->poll();
             producer_->flush();
         } catch (const std::exception& e) {
             elog("flush failed: block id ${id}, block num ${num}", ("id", block_state->id)("num", block_state->block_num));
-            producer_->poll();
             throw;
         }
     }
@@ -517,49 +519,52 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     // ignore any error of unpack
                 }
             } else if (a->name == N(transfer) and is_token(a->account)) {
+                std::unique_ptr<transfer> transfer_ptr;
                 try {
-                    const auto transfer_data = fc::raw::unpack<transfer>(data);
+                    transfer_ptr = std::make_unique<transfer>(fc::raw::unpack<transfer>(data));
+                } catch (...) {
+                    // ignore any error of unpack
+                }
+                if (transfer_ptr) {
                     // TODO: get table row
-                    a->extra = fc::json::to_string(transfer_data, fc::json::legacy_generator);
+                    a->extra = fc::json::to_string(transfer_ptr, fc::json::legacy_generator);
 
                     if (a->account == N(eosio.token)) {
-                        if (transfer_data.from == N(eosio.ram) or transfer_data.from == N(eosio.ramfee)) { // buy
+                        if (transfer_ptr->from == N(eosio.ram) or transfer_ptr->from == N(eosio.ramfee)) { // buy
                            auto it = cached_ram_deals_.find(a->parent_seq);
                            if (it != cached_ram_deals_.end()) {
-                               if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
-                               else it->second.quantity += transfer_data.quantity;
+                               if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
+                               else it->second.quantity += transfer_ptr->quantity;
                            }
-                        } else if (transfer_data.to == N(eosio.ram)) { // sell
+                        } else if (transfer_ptr->to == N(eosio.ram)) { // sell
                             auto it = cached_ram_deals_.find(a->parent_seq);
                             if (it != cached_ram_deals_.end()) {
-                                if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
-                                else it->second.quantity += transfer_data.quantity;
+                                if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
+                                else it->second.quantity += transfer_ptr->quantity;
                             }
-                        } else if (transfer_data.to == N(eosio.ramfee)) { // sell
+                        } else if (transfer_ptr->to == N(eosio.ramfee)) { // sell
                             auto it = cached_ram_deals_.find(a->parent_seq);
                             if (it != cached_ram_deals_.end()) {
-                                if (it->second.quantity.get_amount() == 0) it->second.quantity = -transfer_data.quantity;
-                                else it->second.quantity -= transfer_data.quantity;
+                                if (it->second.quantity.get_amount() == 0) it->second.quantity = -transfer_ptr->quantity;
+                                else it->second.quantity -= transfer_ptr->quantity;
                             }
-                        } else if (transfer_data.from == N(eosio.bpay) or transfer_data.from == N(eosio.vpay)) { // producer block/vote pay
+                        } else if (transfer_ptr->from == N(eosio.bpay) or transfer_ptr->from == N(eosio.vpay)) { // producer block/vote pay
                             {
                                 auto it = cached_claimed_rewards_.find(a->parent_seq);
-                                if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_data.to) {
-                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
-                                    else it->second.quantity += transfer_data.quantity;
+                                if (it != cached_claimed_rewards_.end() and it->second.owner == transfer_ptr->to) {
+                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
+                                    else it->second.quantity += transfer_ptr->quantity;
                                 }
                             }
                             {
                                 auto it = cached_claimed_bonus_.find(a->parent_seq);
-                                if (it != cached_claimed_bonus_.end() and it->second.owner == transfer_data.to) {
-                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_data.quantity;
-                                    else it->second.quantity += transfer_data.quantity;
+                                if (it != cached_claimed_bonus_.end() and it->second.owner == transfer_ptr->to) {
+                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
+                                    else it->second.quantity += transfer_ptr->quantity;
                                 }
                             }
                         }
                     }
-                } catch (...) {
-                    // ignore any error of unpack
                 }
             }
         }
