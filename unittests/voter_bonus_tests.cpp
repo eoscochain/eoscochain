@@ -2,14 +2,7 @@
 #include <eosio/testing/tester.hpp>
 #include <eosio/chain/abi_serializer.hpp>
 
-#include "cdt.version.contract/cdt.contracts.hpp"
-//#include <eosio.system/eosio.system.wast.hpp>
-//#include <eosio.system/eosio.system.abi.hpp>
-//// These contracts are still under dev
-//#include <eosio.token/eosio.token.wast.hpp>
-//#include <eosio.token/eosio.token.abi.hpp>
-//#include <eosio.msig/eosio.msig.wast.hpp>
-//#include <eosio.msig/eosio.msig.abi.hpp>
+#include <contracts.hpp>
 
 #include <Runtime/Runtime.h>
 
@@ -219,8 +212,8 @@ public:
        //  - eosio (code: eosio.bios) (already set by tester constructor)
        //  - eosio.msig (code: eosio.msig)
        //  - eosio.token (code: eosio.token)
-       set_code_abi(N(eosio.msig), eosio::testing::contracts::msig_wasm(), eosio::testing::contracts::msig_abi());//, &eosio_active_pk);
-       set_code_abi(N(eosio.token), eosio::testing::contracts::token_wasm(), eosio::testing::contracts::token_abi()); //, &eosio_active_pk);
+       set_code_abi(N(eosio.msig), eosio::testing::contracts::eosio_msig_wasm(), eosio::testing::contracts::eosio_msig_abi());//, &eosio_active_pk);
+       set_code_abi(N(eosio.token), eosio::testing::contracts::eosio_token_wasm(), eosio::testing::contracts::eosio_token_abi()); //, &eosio_active_pk);
 
        // Set privileged for eosio.msig and eosio.token
        set_privileged(N(eosio.msig));
@@ -249,7 +242,7 @@ public:
        }
 
        // Set eosio.system to eosio
-       set_code_abi(config::system_account_name, eosio::testing::contracts::system_wasm(), eosio::testing::contracts::system_abi());
+       set_code_abi(config::system_account_name, eosio::testing::contracts::eosio_system_wasm(), eosio::testing::contracts::eosio_system_abi());
        // init
        base_tester::push_action(config::system_account_name, N(init), config::system_account_name, mvo()
                ("version",  0)
