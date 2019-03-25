@@ -62,6 +62,7 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
         return;
     }
 
+    enabled_ = true;
     ilog("Initialize kafka plugin");
 
     chain_plugin_ = app().find_plugin<chain_plugin>();
@@ -106,6 +107,7 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
     kafka_->set_config(config);
     kafka_->set_topic(options.at("kafka-topic").as<string>());
+    kafka_->set_poll_interval(options.at("kafka-batch-num-messages").as<unsigned>());
 
     if (options.at("kafka-fixed-partition").as<int>() >= 0) {
         kafka_->set_partition(options.at("kafka-fixed-partition").as<int>());
@@ -119,6 +121,7 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     db.add_index<block_cache_index>();
     db.add_index<stats_index>();
     db.add_index<producer_stats_index>();
+    db.add_index<voter_stats_index>();
 
     if (not db.find<stats_object>()) {
         db.create<stats_object>([&](auto &t) {
@@ -151,10 +154,13 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
 }
 
 void kafka_plugin::plugin_startup() {
+    if (not enabled_) return;
     ilog("Started kafka_plugin");
 }
 
 void kafka_plugin::plugin_shutdown() {
+    if (not enabled_) return;
+
     ilog("Stopping kafka_plugin");
 
     try {
@@ -165,6 +171,7 @@ void kafka_plugin::plugin_shutdown() {
         kafka_->stop();
     } catch (const std::exception& e) {
         elog("Exception on kafka_plugin shutdown: ${e}", ("e", e.what()));
+        throw;
     }
 
     ilog("Stopped kafka_plugin");

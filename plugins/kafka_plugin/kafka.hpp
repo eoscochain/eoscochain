@@ -19,6 +19,7 @@ public:
     void set_config(Configuration config);
     void set_topic(const string& topic);
     void set_partition(int partition);
+    void set_poll_interval(unsigned interval);
     void start();
     void stop();
 
@@ -35,19 +36,23 @@ private:
 
     int partition_{-1};
 
+    unsigned poll_interval_ = 0;
+    unsigned poll_counter_ = 0;
+
     std::unique_ptr<Producer> producer_;
 
     std::unordered_map<transaction_id_type, chain::transaction_trace_ptr> cached_traces_;
     std::unordered_map<transaction_id_type, vector<ActionPtr>> cached_actions_;
 
-    int producer_stats_interval_ = 0;
-    std::unique_ptr<producer_schedule> producer_schedule_;
+    int producer_stats_counter_ = 0;
+    std::unique_ptr<ProducerSchedule> producer_schedule_;
 
     std::unordered_set<name> cached_tokens_;
 
     std::unordered_map<uint64_t, ram_deal> cached_ram_deals_;
 
     std::unordered_map<uint64_t, claimed_rewards> cached_claimed_rewards_;
+    std::unordered_map<uint64_t, claimed_bonus> cached_claimed_bonus_; // only valid for eoscochain
 };
 
 }

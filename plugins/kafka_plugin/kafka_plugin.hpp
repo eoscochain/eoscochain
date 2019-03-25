@@ -25,6 +25,8 @@ public:
     void plugin_shutdown();
 
 private:
+    bool enabled_{};
+
     chain_plugin* chain_plugin_{};
 
     boost::signals2::connection block_conn_;

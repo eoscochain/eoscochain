@@ -4,6 +4,8 @@
 #include <eosio/chain/asset.hpp>
 #include <eosio/chain_plugin/chain_plugin.hpp>
 
+#include "types.hpp"
+
 namespace eosio {
 
 using namespace chain;
@@ -71,11 +73,30 @@ using producer_stats_index = chainbase::shared_multi_index_container<
    >
 >;
 
+struct voter_stats_object : public chainbase::object<voter_stats_object_type, voter_stats_object> {
+   OBJECT_CTOR( voter_stats_object );
+
+   id_type id;
+   account_name voter;
+   asset claimed_bonus;
+};
+
+struct by_voter;
+
+using voter_stats_index = chainbase::shared_multi_index_container<
+   voter_stats_object,
+   indexed_by<
+      ordered_unique<tag<by_id>, member<voter_stats_object, voter_stats_object::id_type, &voter_stats_object::id>>,
+      ordered_unique<tag<by_voter>, member<voter_stats_object, account_name, &voter_stats_object::voter>>
+   >
+>;
+
 }
 
 CHAINBASE_SET_INDEX_TYPE(eosio::block_cache_object, eosio::block_cache_index)
 CHAINBASE_SET_INDEX_TYPE(eosio::stats_object, eosio::stats_index)
 CHAINBASE_SET_INDEX_TYPE(eosio::producer_stats_object, eosio::producer_stats_index)
+CHAINBASE_SET_INDEX_TYPE(eosio::voter_stats_object, eosio::voter_stats_index)
 
 FC_REFLECT(eosio::block_cache_object, (block_id))
 
@@ -83,11 +104,6 @@ namespace kafka {
 
 using namespace std;
 using namespace eosio::chain;
-
-struct producer_schedule {
-   uint32_t version = 0;
-   vector<name> producers;
-};
 
 struct buyram {
    name buyer;
@@ -151,6 +167,10 @@ struct claimrewards {
    name owner;
 };
 
+struct claimbonus {
+   name owner;
+};
+
 struct create {
    name issuer;
    asset maximum_supply;
@@ -177,7 +197,21 @@ struct ram_deal {
 
 struct claimed_rewards {
    name owner;
-   asset quantity;
+   asset quantity; // total claimed rewards
+   asset voter_bonus_balance; // only valid for eoscochain
+};
+
+// only valid for eoscochain
+struct voter_bonus {
+   name producer;
+   asset balance;
+};
+
+// only valid for eoscochain
+struct claimed_bonus {
+   name owner;
+   asset quantity; // total claimed bonus
+   vector<voter_bonus> balances; // voter bonus balance of every producer who is voted for
 };
 
 struct voter_info {
@@ -188,6 +222,7 @@ struct voter_info {
    double last_vote_weight;
    double proxied_vote_weight;
    bool is_proxy;
+   uint64_t last_change_time; // only valid for eoscochain
    uint32_t flags1;
    uint32_t reserved2;
    asset reserved3;
@@ -216,6 +251,7 @@ struct voter {
    double last_vote_weight;
    double proxied_vote_weight;
    bool is_proxy;
+   uint64_t last_change_time; // only valid for eoscochain
 
    vector<producer> producers;
 };
@@ -233,16 +269,19 @@ FC_REFLECT(kafka::regproducer, (producer)(producer_key)(url)(location))
 FC_REFLECT(kafka::unregprod, (producer))
 FC_REFLECT(kafka::rmvproducer, (producer))
 FC_REFLECT(kafka::claimrewards, (owner))
+FC_REFLECT(kafka::claimbonus, (owner))
 FC_REFLECT(kafka::create, (issuer)(maximum_supply))
 FC_REFLECT(kafka::issue, (to)(quantity)(memo))
 FC_REFLECT(kafka::transfer, (from)(to)(quantity)(memo))
 FC_REFLECT(kafka::ram_deal, (global_seq)(bytes)(quantity))
-FC_REFLECT(kafka::claimed_rewards, (owner)(quantity))
+FC_REFLECT(kafka::claimed_rewards, (owner)(quantity)(voter_bonus_balance))
+FC_REFLECT(kafka::voter_bonus, (producer)(balance))
+FC_REFLECT(kafka::claimed_bonus, (owner)(quantity)(balances))
 FC_REFLECT(kafka::voter_info, (owner)(proxy)(producers)(staked)
                               (last_vote_weight)(proxied_vote_weight)
-                              (is_proxy)(flags1)(reserved2)(reserved3))
+                              (is_proxy)(last_change_time)(flags1)(reserved2)(reserved3))
 FC_REFLECT(kafka::producer_info, (owner)(total_votes)(producer_key)(is_active)
                                  (url)(unpaid_blocks)(last_claim_time)(location))
 FC_REFLECT(kafka::producer, (owner)(total_votes))
 FC_REFLECT(kafka::voter, (owner)(proxy)(staked)(last_vote_weight)(proxied_vote_weight)
-                         (is_proxy)(producers))
+                         (is_proxy)(last_change_time)(producers))

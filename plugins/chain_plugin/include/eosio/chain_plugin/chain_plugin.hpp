@@ -355,6 +355,13 @@ public:
 
    vector<fc::variant> get_producers_by_names ( const get_producers_by_names_params& params )const;
 
+   struct get_voter_bonuses_by_names_params {
+      vector<string> producers;
+      bool json = false;
+   };
+
+   vector<fc::variant> get_voter_bonuses_by_names ( const get_voter_bonuses_by_names_params& params )const;
+
    struct get_producer_schedule_params {
    };
 
