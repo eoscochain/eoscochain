@@ -110,7 +110,7 @@ void relay::push_transaction(vector<action> actions, function<void(bool)> callba
    }
 
    auto packet_tx = fc::mutable_variant_object(packed_transaction(trx, compression));
-   auto rw_api = chain.get_read_write_api();
+   static auto rw_api = chain.get_read_write_api(); // NB: here use static variable to avoid local variable abuse after its releasing
    rw_api.push_transaction(fc::variant_object(packet_tx), [action_names, callback](const fc::static_variant<fc::exception_ptr, chain_apis::read_write::push_transaction_results>& result) {
       wlog("actions: ${a}", ("a", action_names));
       if (result.contains<fc::exception_ptr>()) {
