@@ -193,6 +193,8 @@ struct ram_deal {
    uint64_t global_seq;
    int64_t bytes; // positive: buy; negative: sell
    asset quantity;
+
+   name_t action; // buyram/buyrambytes/sellram; DO NOT FC_REFLECT!
 };
 
 struct claimed_rewards {

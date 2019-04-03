@@ -394,7 +394,8 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                         cached_ram_deals_[a->global_seq] = ram_deal{
                             .global_seq = a->global_seq,
                             .bytes = brb.bytes,
-                            .quantity = asset()
+                            .quantity = asset(),
+                            .action = N(buyrambytes)
                         };
                         has_ram_deal = true;
                         break;
@@ -405,7 +406,8 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                         auto r = ram_deal{
                            .global_seq = a->global_seq,
                            .bytes = static_cast<int64_t>(static_cast<double>(br.tokens.get_amount()) / ram_price.get_amount() * 1024), // estimation
-                           .quantity = br.tokens
+                           .quantity = br.tokens,
+                           .action = N(buyram)
                         };
                         a->extra = fc::json::to_string(r, fc::json::legacy_generator);
                         break;
@@ -415,7 +417,8 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                         cached_ram_deals_[a->global_seq] = ram_deal{
                            .global_seq = a->global_seq,
                            .bytes = -sr.bytes,
-                           .quantity = asset()
+                           .quantity = asset(),
+                           .action = N(sellram)
                         };
                         has_ram_deal = true;
                         break;
@@ -530,23 +533,28 @@ void kafka::push_action(const chain::action_trace& action_trace, uint64_t parent
                     a->extra = fc::json::to_string(transfer_ptr, fc::json::legacy_generator);
 
                     if (a->account == N(eosio.token)) {
-                        if (transfer_ptr->from == N(eosio.ram) or transfer_ptr->from == N(eosio.ramfee)) { // buy
+                        if (transfer_ptr->from == N(eosio.ram)) { // sell
                            auto it = cached_ram_deals_.find(a->parent_seq);
                            if (it != cached_ram_deals_.end()) {
                                if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
                                else it->second.quantity += transfer_ptr->quantity;
                            }
-                        } else if (transfer_ptr->to == N(eosio.ram)) { // sell
+                        } else if (transfer_ptr->to == N(eosio.ram)) { // buy
                             auto it = cached_ram_deals_.find(a->parent_seq);
                             if (it != cached_ram_deals_.end()) {
                                 if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
                                 else it->second.quantity += transfer_ptr->quantity;
                             }
-                        } else if (transfer_ptr->to == N(eosio.ramfee)) { // sell
+                        } else if (transfer_ptr->to == N(eosio.ramfee)) {
                             auto it = cached_ram_deals_.find(a->parent_seq);
                             if (it != cached_ram_deals_.end()) {
-                                if (it->second.quantity.get_amount() == 0) it->second.quantity = -transfer_ptr->quantity;
-                                else it->second.quantity -= transfer_ptr->quantity;
+                                if (it->second.action == N(sellram)) { // sell
+                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = -transfer_ptr->quantity;
+                                    else it->second.quantity -= transfer_ptr->quantity;
+                                } else { // buy
+                                    if (it->second.quantity.get_amount() == 0) it->second.quantity = transfer_ptr->quantity;
+                                    else it->second.quantity += transfer_ptr->quantity;
+                                }
                             }
                         } else if (transfer_ptr->from == N(eosio.bpay) or transfer_ptr->from == N(eosio.vpay)) { // producer block/vote pay
                             {
