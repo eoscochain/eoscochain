@@ -45,7 +45,7 @@ void kafka_plugin::set_program_options(options_description&, options_description
             ("kafka-topic", bpo::value<string>()->default_value("eos"), "Kafka topic for message")
             ("kafka-batch-num-messages", bpo::value<unsigned>()->default_value(1024), "Kafka minimum number of messages to wait for to accumulate in the local queue before sending off a message set")
             ("kafka-queue-buffering-max-ms", bpo::value<unsigned>()->default_value(500), "Kafka how long to wait for kafka-batch-num-messages to fill up in the local queue")
-            ("kafka-message-max-bytes", bpo::value<unsigned>()->default_value(104857600), "Kafka maximum kafka protocol request message size")
+            ("kafka-message-max-bytes", bpo::value<unsigned>()->default_value(524288000), "Kafka maximum kafka protocol request message size")
             ("kafka-compression-codec", bpo::value<compression_codec>()->value_name("none/gzip/snappy/lz4"), "Kafka compression codec to use for compressing message sets, default is snappy")
             ("kafka-request-required-acks", bpo::value<int>()->default_value(1), "Kafka indicates how many acknowledgements the leader broker must receive from ISR brokers before responding to the request: 0=Broker does not send any response/ack to client, 1=Only the leader broker will need to ack the message, -1=broker will block until message is committed by all in sync replicas (ISRs) or broker's min.insync.replicas setting before sending response")
             ("kafka-message-send-max-retries", bpo::value<unsigned>()->default_value(2), "Kafka how many times to retry sending a failing MessageSet")
@@ -107,7 +107,7 @@ void kafka_plugin::plugin_initialize(const variables_map& options) {
     }
     kafka_->set_config(config);
     kafka_->set_topic(options.at("kafka-topic").as<string>());
-    kafka_->set_poll_interval(options.at("kafka-batch-num-messages").as<unsigned>());
+    kafka_->set_poll_interval(options.at("kafka-batch-num-messages").as<unsigned>() * 3);
 
     if (options.at("kafka-fixed-partition").as<int>() >= 0) {
         kafka_->set_partition(options.at("kafka-fixed-partition").as<int>());
