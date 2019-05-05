@@ -282,8 +282,6 @@ std::pair<uint32_t, uint32_t> kafka::push_transaction(const chain::transaction_r
         t->exception = tx_trace->except->to_string();
     }
 
-    block->transactions.push_back(*t);
-
     auto actions_it = cached_actions_.find(id);
     if (actions_it != cached_actions_.end()) {
         for (auto& a: actions_it->second) {
@@ -298,6 +296,8 @@ std::pair<uint32_t, uint32_t> kafka::push_transaction(const chain::transaction_r
             else t->context_free_action_count += 1;
         }
     }
+
+    block->transactions.push_back(*t);
 
     return {t->action_count, t->context_free_action_count};
 }
