@@ -1034,6 +1034,24 @@ class action_api : public context_aware_api {
       }
 };
 
+class core_symbol_api : public context_aware_api {
+public:
+   core_symbol_api( apply_context& ctx )
+      : context_aware_api(ctx,true) {}
+
+   uint64_t core_symbol() {
+      return string_to_symbol_c(4, "CCA");
+   }
+
+   void set_core_symbol(array_ptr<const char> str, size_t str_len) {
+   }
+};
+
+REGISTER_INTRINSICS(core_symbol_api,
+   (core_symbol, int64_t())
+   (set_core_symbol, void(int, int))
+);
+
 class console_api : public context_aware_api {
    public:
       console_api( apply_context& ctx )
