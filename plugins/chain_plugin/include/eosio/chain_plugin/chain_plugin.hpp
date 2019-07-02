@@ -774,6 +774,17 @@ FC_REFLECT( eosio::chain_apis::read_only::get_producers_result, (rows)(total_pro
 
 FC_REFLECT( eosio::chain_apis::read_only::get_producers_by_names_params, (producers)(allow_missing) )
 
+FC_REFLECT( eosio::chain_apis::read_only::get_blackwhitelist_params,
+           (includes_sender_bypass_whiteblacklist)(includes_actor_whitelist)
+           (includes_actor_blacklist)(includes_contract_whitelist)
+           (includes_contract_blacklist)(includes_action_blacklist)
+           (includes_key_blacklist) )
+FC_REFLECT( eosio::chain_apis::read_only::get_blackwhitelist_result,
+           (sender_bypass_whiteblacklist)(actor_whitelist)
+           (actor_blacklist)(contract_whitelist)
+           (contract_blacklist)(action_blacklist)
+           (key_blacklist) )
+
 FC_REFLECT_EMPTY( eosio::chain_apis::read_only::get_producer_schedule_params )
 FC_REFLECT( eosio::chain_apis::read_only::get_producer_schedule_result, (active)(pending)(proposed) );
 
