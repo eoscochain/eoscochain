@@ -362,6 +362,28 @@ public:
 
    vector<fc::variant> get_voter_bonuses_by_names ( const get_voter_bonuses_by_names_params& params )const;
 
+   struct get_blackwhitelist_params {
+      bool   includes_sender_bypass_whiteblacklist = false;
+      bool   includes_actor_whitelist = false;
+      bool   includes_actor_blacklist = false;
+      bool   includes_contract_whitelist = false;
+      bool   includes_contract_blacklist = false;
+      bool   includes_action_blacklist = false;
+      bool   includes_key_blacklist = false;
+   };
+
+   struct get_blackwhitelist_result {
+      vector<account_name>   sender_bypass_whiteblacklist;
+      vector<account_name>   actor_whitelist;
+      vector<account_name>   actor_blacklist;
+      vector<account_name>   contract_whitelist;
+      vector<account_name>   contract_blacklist;
+      vector< pair<account_name, action_name> > action_blacklist;
+      vector<public_key_type> key_blacklist;
+   };
+
+   get_blackwhitelist_result get_blackwhitelist( const get_blackwhitelist_params& params ) const;
+
    struct get_producer_schedule_params {
    };
 

@@ -7,6 +7,7 @@
 #include <eosio/chain/block_log.hpp>
 #include <eosio/chain/exceptions.hpp>
 #include <eosio/chain/authorization_manager.hpp>
+#include <eosio/chain/blackwhitelist_object.hpp>
 #include <eosio/chain/producer_object.hpp>
 #include <eosio/chain/config.hpp>
 #include <eosio/chain/wasm_interface.hpp>
@@ -1462,6 +1463,20 @@ vector<fc::variant> read_only::get_voter_bonuses_by_names ( const get_voter_bonu
       }
    }
 
+   return result;
+}
+
+read_only::get_blackwhitelist_result read_only::get_blackwhitelist( const get_blackwhitelist_params& params ) const {
+   const auto& bwl_object = db.db().get<blackwhitelist_object>();
+   const auto& bw = bwl_object.blackwhitelist;
+   get_blackwhitelist_result result;
+   if (params.includes_sender_bypass_whiteblacklist) result.sender_bypass_whiteblacklist.assign(bw.sender_bypass_whiteblacklist.cbegin(), bw.sender_bypass_whiteblacklist.cend());
+   if (params.includes_actor_whitelist) result.actor_whitelist.assign(bw.actor_whitelist.cbegin(), bw.actor_whitelist.cend());
+   if (params.includes_actor_blacklist) result.actor_blacklist.assign(bw.actor_blacklist.cbegin(), bw.actor_blacklist.cend());
+   if (params.includes_contract_whitelist) result.contract_whitelist.assign(bw.contract_whitelist.cbegin(), bw.contract_whitelist.cend());
+   if (params.includes_contract_blacklist) result.contract_blacklist.assign(bw.contract_blacklist.cbegin(), bw.contract_blacklist.cend());
+   if (params.includes_action_blacklist) result.action_blacklist.assign(bw.action_blacklist.cbegin(), bw.action_blacklist.cend());
+   if (params.includes_key_blacklist) result.key_blacklist.assign(bw.key_blacklist.cbegin(), bw.key_blacklist.cend());
    return result;
 }
 
