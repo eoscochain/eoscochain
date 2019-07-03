@@ -1939,57 +1939,57 @@ shared_vector<T> update_list(const shared_vector<T> &list, const flat_set<T> &ad
 
 void controller::update_onchain_sender_bypass_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto& list = update_list(bw.blackwhitelist.sender_bypass_whiteblacklist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.sender_bypass_whiteblacklist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.sender_bypass_whiteblacklist = list;
    });
    set_blackwhitelist();
 }
 void controller::update_onchain_actor_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto& list = update_list(bw.blackwhitelist.actor_whitelist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.actor_whitelist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.actor_whitelist = list;
    });
    set_blackwhitelist();
 }
 void controller::update_onchain_actor_blacklist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto& list = update_list(bw.blackwhitelist.actor_blacklist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.actor_blacklist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.actor_blacklist = list;
    });
    set_blackwhitelist();
 }
 void controller::update_onchain_contract_whitelist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto& list = update_list(bw.blackwhitelist.contract_whitelist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.contract_whitelist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.contract_whitelist = list;
    });
    set_blackwhitelist();
 }
 void controller::update_onchain_contract_blacklist( const flat_set<account_name>& add, const flat_set<account_name>& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto& list = update_list(bw.blackwhitelist.contract_blacklist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.contract_blacklist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.contract_blacklist = list;
    });
    set_blackwhitelist();
 }
 void controller::update_onchain_action_blacklist( const flat_set< pair<account_name, action_name> >& add, const flat_set< pair<account_name, action_name> >& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto list = update_list(bw.blackwhitelist.action_blacklist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.action_blacklist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.action_blacklist = list;
    });
    set_blackwhitelist();
 }
 void controller::update_onchain_key_blacklist( const flat_set<public_key_type>& add, const flat_set<public_key_type>& rmv ) {
    const auto& bw = my->db.get<blackwhitelist_object>();
+   const auto list = update_list(bw.blackwhitelist.key_blacklist, add, rmv);
    my->db.modify(bw, [&](blackwhitelist_object& bw) {
-      auto& list = bw.blackwhitelist.key_blacklist;
-      list = update_list(list, add, rmv);
+      bw.blackwhitelist.key_blacklist = list;
    });
    set_blackwhitelist();
 }
