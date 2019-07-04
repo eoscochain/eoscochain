@@ -1647,6 +1647,8 @@ struct controller_impl {
    }
 
    void check_contract_list( account_name code )const {
+      if (code == config::system_account_name) return;
+
       if( conf.contract_whitelist.size() > 0 ) {
          EOS_ASSERT( conf.contract_whitelist.find( code ) != conf.contract_whitelist.end(),
                      contract_whitelist_exception,
@@ -1661,6 +1663,8 @@ struct controller_impl {
    }
 
    void check_action_list( account_name code, action_name action )const {
+      if (code == config::system_account_name) return;
+
       if( conf.action_blacklist.size() > 0 ) {
          EOS_ASSERT( conf.action_blacklist.find( std::make_pair(code, action) ) == conf.action_blacklist.end(),
                      action_blacklist_exception,
